@@ -1,65 +1,236 @@
 {
-  "name": "Telegram Approval Flow",
+  "name": "S/Agency Telegram Communication",
   "nodes": [
     {
       "parameters": {
-        "updates": [
-          "message",
-          "callback_query"
-        ]
+        "httpMethod": "POST",
+        "path": "s-agency/outbound/v1",
+        "responseMode": "onReceived",
+        "options": {}
       },
-      "id": "telegram-trigger",
-      "name": "Telegram Trigger",
-      "type": "n8n-nodes-base.telegramTrigger",
-      "typeVersion": 1,
-      "position": [200,300]
+      "id": "outbound-webhook",
+      "name": "Channel-neutral Outbound Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "s-agency-outbound-v1"
     },
     {
       "parameters": {
-        "chatId": "={{$env.TELEGRAM_CHAT_ID}}",
-        "text": "New approval request received.",
-        "replyMarkup": "inlineKeyboard",
-        "inlineKeyboard": {
-          "rows": [
-            {
-              "row": {
-                "buttons": [
-                  {
-                    "text": "Approve",
-                    "additionalFields": {
-                      "callback_data": "approve"
-                    }
-                  },
-                  {
-                    "text": "Reject",
-                    "additionalFields": {
-                      "callback_data": "reject"
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        }
+        "method": "POST",
+        "url": "={{$env.SOS_GATEWAY_URL + '/v1/communications/authorize'}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify($json.body)}}",
+        "options": {}
       },
-      "id": "telegram-send",
-      "name": "Send Approval Card",
+      "id": "authorize-outbound",
+      "name": "S-OS Authorize Outbound",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "S-OS Passport Gateway (private)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $json;\nconst kinds = new Set(['update', 'decision_request', 'deliverable']);\nif (e.authorized !== true || !kinds.has(e.kind) || e.channel !== 'telegram') return [];\nfor (const key of ['event_id','task_id','receipt_id','expires_at','title']) if (typeof e[key] !== 'string' || !e[key]) return [];\nconst expiry = Date.parse(e.expires_at);\nif (!Number.isFinite(expiry) || expiry <= Date.now()) return [];\nif (e.kind === 'decision_request') {\n  if (typeof e.summary !== 'string' || !e.summary || !/^[A-Za-z0-9_-]{8,48}$/.test(e.approve_token || '') || !/^[A-Za-z0-9_-]{8,48}$/.test(e.reject_token || '')) return [];\n  e.text = `APPROVAL REQUIRED\\n${e.title}\\n\\n${e.summary}\\n\\nTask: ${e.task_id}\\nReceipt: ${e.receipt_id}\\nExpires: ${e.expires_at}`;\n} else if (e.kind === 'deliverable') {\n  if (typeof e.deliverable_url !== 'string' || !e.deliverable_url.startsWith('https://')) return [];\n  e.text = `DELIVERABLE\\n${e.title}\\n${e.deliverable_url}\\n\\nTask: ${e.task_id}\\nReceipt: ${e.receipt_id}\\nExpires: ${e.expires_at}`;\n} else {\n  if (typeof e.summary !== 'string' || !e.summary) return [];\n  e.text = `UPDATE\\n${e.title}\\n\\n${e.summary}\\n\\nTask: ${e.task_id}\\nReceipt: ${e.receipt_id}\\nExpires: ${e.expires_at}`;\n}\nreturn [{json:e}];"
+      },
+      "id": "normalize-outbound",
+      "name": "Validate Message Contract",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "conditions": [{"id": "decision-kind", "leftValue": "={{$json.kind}}", "rightValue": "decision_request", "operator": {"type": "string", "operation": "equals"}}],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-decision-request",
+      "name": "Is Decision Request?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [720, 0]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$env.TELEGRAM_OWNER_CHAT_ID}}",
+        "text": "={{$json.text}}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {"rows": [{"row": {"buttons": [
+          {"text": "Approve", "additionalFields": {"callback_data": "={{'sosd:' + $json.approve_token}}"}},
+          {"text": "Reject", "additionalFields": {"callback_data": "={{'sosd:' + $json.reject_token}}"}}
+        ]}}]},
+        "additionalFields": {"appendAttribution": false}
+      },
+      "id": "send-decision",
+      "name": "Telegram Decision Adapter",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1,
-      "position": [520,300]
+      "typeVersion": 1.2,
+      "position": [980, -100],
+      "credentials": {"telegramApi": {"name": "S-Agency Telegram Bot (private)"}}
+    },
+    {
+      "parameters": {
+        "chatId": "={{$env.TELEGRAM_OWNER_CHAT_ID}}",
+        "text": "={{$json.text}}",
+        "additionalFields": {"appendAttribution": false, "disableWebPagePreview": true}
+      },
+      "id": "send-notification",
+      "name": "Telegram Notification Adapter",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [980, 100],
+      "credentials": {"telegramApi": {"name": "S-Agency Telegram Bot (private)"}}
+    },
+    {
+      "parameters": {"updates": ["callback_query"], "additionalFields": {}},
+      "id": "telegram-trigger",
+      "name": "Telegram Callback Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 420],
+      "credentials": {"telegramApi": {"name": "S-Agency Telegram Bot (private)"}}
+    },
+    {
+      "parameters": {
+        "jsCode": "const q = $json.callback_query;\nconst expectedChat = String($env.TELEGRAM_OWNER_CHAT_ID || '');\nconst expectedSender = String($env.TELEGRAM_OWNER_USER_ID || '');\nconst data = q?.data || '';\nconst token = data.startsWith('sosd:') ? data.slice(5) : '';\nconst valid = Boolean(q?.id && String(q?.message?.chat?.id) === expectedChat && String(q?.from?.id) === expectedSender && /^[A-Za-z0-9_-]{8,48}$/.test(token));\nreturn [{json:{transport_authorized:valid, callback_query_id:q?.id || '', telegram_chat_id:String(q?.message?.chat?.id || ''), telegram_sender_id:String(q?.from?.id || ''), decision_token:token}}];"
+      },
+      "id": "verify-telegram",
+      "name": "Verify Owner and Callback Envelope",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 420]
+    },
+    {
+      "parameters": {
+        "conditions": {"options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"}, "conditions": [{"id": "transport-ok", "leftValue": "={{$json.transport_authorized}}", "rightValue": true, "operator": {"type": "boolean", "operation": "true", "singleValue": true}}], "combinator": "and"},
+        "options": {}
+      },
+      "id": "transport-authorized",
+      "name": "Transport Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [480, 420]
+    },
+    {
+      "parameters": {
+        "operation": "answerQuery",
+        "queryId": "={{$json.callback_query_id}}",
+        "additionalFields": {"text": "Not authorized.", "showAlert": true}
+      },
+      "id": "deny-transport",
+      "name": "Deny Unauthenticated Callback",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [740, 560],
+      "credentials": {"telegramApi": {"name": "S-Agency Telegram Bot (private)"}}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SOS_GATEWAY_URL + '/v1/approvals/decisions'}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({decision_token:$json.decision_token,callback_query_id:$json.callback_query_id,channel:'telegram',sender_id:$json.telegram_sender_id,chat_id:$json.telegram_chat_id})}}",
+        "options": {}
+      },
+      "id": "consume-decision",
+      "name": "S-OS Consume One-time Decision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, 360],
+      "credentials": {"httpHeaderAuth": {"name": "S-OS Passport Gateway (private)"}}
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nconst validOutcome = ['accepted','rejected','denied','expired','duplicate'].includes(d.outcome);\nconst auditable = typeof d.task_id === 'string' && typeof d.approval_id === 'string' && typeof d.receipt_id === 'string' && typeof d.callback_query_id === 'string';\nconst mayExecute = validOutcome && auditable && d.outcome === 'accepted' && d.decision === 'approve' && d.passport_authorized === true;\nreturn [{json:{...d,may_execute:mayExecute,ack_text: mayExecute ? 'Approved. Execution handed to S-OS.' : (d.outcome === 'accepted' && d.decision === 'reject' ? 'Rejected. No command was run.' : `No effect: ${validOutcome ? d.outcome : 'invalid gateway response'}.`)}}];"
+      },
+      "id": "classify-decision",
+      "name": "Enforce Gateway Decision Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [980, 360]
+    },
+    {
+      "parameters": {
+        "conditions": {"options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"}, "conditions": [{"id": "may-execute", "leftValue": "={{$json.may_execute}}", "rightValue": true, "operator": {"type": "boolean", "operation": "true", "singleValue": true}}], "combinator": "and"},
+        "options": {}
+      },
+      "id": "may-execute",
+      "name": "Approved and Authorized?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1220, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SOS_GATEWAY_URL + '/v1/commands/execute-approved'}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{JSON.stringify({task_id:$json.task_id,approval_id:$json.approval_id,decision_receipt_id:$json.receipt_id})}}",
+        "options": {}
+      },
+      "id": "execute-approved",
+      "name": "S-OS Execute Approved Command",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1460, 260],
+      "credentials": {"httpHeaderAuth": {"name": "S-OS Passport Gateway (private)"}}
+    },
+    {
+      "parameters": {"operation": "answerQuery", "queryId": "={{$('S-OS Consume One-time Decision').item.json.callback_query_id}}", "additionalFields": {"text": "Approved command accepted by S-OS.", "showAlert": false}},
+      "id": "ack-executed",
+      "name": "Acknowledge Approved Command",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1700, 260],
+      "credentials": {"telegramApi": {"name": "S-Agency Telegram Bot (private)"}}
+    },
+    {
+      "parameters": {"operation": "answerQuery", "queryId": "={{$json.callback_query_id}}", "additionalFields": {"text": "={{$json.ack_text}}", "showAlert": false}},
+      "id": "ack-no-effect",
+      "name": "Acknowledge Without Execution",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1460, 460],
+      "credentials": {"telegramApi": {"name": "S-Agency Telegram Bot (private)"}}
     }
   ],
   "connections": {
-    "Telegram Trigger": {
-      "main": [
-        [
-          {
-            "node": "Send Approval Card",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  }
+    "Channel-neutral Outbound Webhook": {"main": [[{"node": "S-OS Authorize Outbound", "type": "main", "index": 0}]]},
+    "S-OS Authorize Outbound": {"main": [[{"node": "Validate Message Contract", "type": "main", "index": 0}]]},
+    "Validate Message Contract": {"main": [[{"node": "Is Decision Request?", "type": "main", "index": 0}]]},
+    "Is Decision Request?": {"main": [[{"node": "Telegram Decision Adapter", "type": "main", "index": 0}], [{"node": "Telegram Notification Adapter", "type": "main", "index": 0}]]},
+    "Telegram Callback Trigger": {"main": [[{"node": "Verify Owner and Callback Envelope", "type": "main", "index": 0}]]},
+    "Verify Owner and Callback Envelope": {"main": [[{"node": "Transport Authorized?", "type": "main", "index": 0}]]},
+    "Transport Authorized?": {"main": [[{"node": "S-OS Consume One-time Decision", "type": "main", "index": 0}], [{"node": "Deny Unauthenticated Callback", "type": "main", "index": 0}]]},
+    "S-OS Consume One-time Decision": {"main": [[{"node": "Enforce Gateway Decision Result", "type": "main", "index": 0}]]},
+    "Enforce Gateway Decision Result": {"main": [[{"node": "Approved and Authorized?", "type": "main", "index": 0}]]},
+    "Approved and Authorized?": {"main": [[{"node": "S-OS Execute Approved Command", "type": "main", "index": 0}], [{"node": "Acknowledge Without Execution", "type": "main", "index": 0}]]},
+    "S-OS Execute Approved Command": {"main": [[{"node": "Acknowledge Approved Command", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1", "saveDataErrorExecution": "all", "saveDataSuccessExecution": "all", "saveManualExecutions": true},
+  "active": false,
+  "versionId": "6ea31bd5-4aa8-4f93-a7d6-e427f537e3ad",
+  "meta": {"templateCredsSetupCompleted": false},
+  "tags": []
 }
