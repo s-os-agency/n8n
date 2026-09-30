@@ -1,5 +1,5 @@
 {
-  "name": "S/ Orchestrator Invoke — Hourly + On-Demand",
+  "name": "Orchestrator Invoke — Hourly + On-Demand",
   "nodes": [
     {
       "id": "hourly-trigger",
