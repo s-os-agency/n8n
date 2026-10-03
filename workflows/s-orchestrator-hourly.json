@@ -1,15 +1,7 @@
 {
-  "name": "Orchestrator Invoke — Hourly + On-Demand",
+  "name": "S/ Orchestrator — Assistant Control Hourly",
   "nodes": [
     {
-      "id": "hourly-trigger",
-      "name": "Hourly Trigger",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [
-        240,
-        220
-      ],
       "parameters": {
         "rule": {
           "interval": [
@@ -19,90 +11,169 @@
             }
           ]
         }
-      }
+      },
+      "id": "hourly-trigger",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -900,
+        -100
+      ]
     },
     {
+      "parameters": {},
       "id": "manual-trigger",
-      "name": "On-Demand Trigger",
+      "name": "Manual Evidence Run",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        240,
-        420
-      ],
-      "parameters": {}
+        -900,
+        100
+      ]
     },
     {
-      "id": "build-command",
-      "name": "Build Orchestrator Command",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        520,
-        320
-      ],
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "a1",
-              "name": "action",
-              "type": "string",
-              "value": "execute_task"
-            },
-            {
-              "id": "a2",
-              "name": "objective",
-              "type": "string",
-              "value": "Review current operational work, choose the next useful non-financial action, dispatch through S-OS, and return a concise receipt. Do not wait for the owner unless authority is genuinely required."
-            },
-            {
-              "id": "a3",
-              "name": "requested_by",
-              "type": "string",
-              "value": "GPT-5.6 Sol / orchestrator"
-            },
-            {
-              "id": "a4",
-              "name": "priority",
-              "type": "string",
-              "value": "normal"
-            },
-            {
-              "id": "a5",
-              "name": "run_mode",
-              "type": "string",
-              "value": "live"
-            },
-            {
-              "id": "a6",
-              "name": "approval_status",
-              "type": "string",
-              "value": "approved"
-            },
-            {
-              "id": "a7",
-              "name": "idempotency_key",
-              "type": "string",
-              "value": "={{ 'orchestrator_' + $now.toFormat('yyyyLLdd_HH') }}"
-            }
-          ]
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.ASSISTANT_CONTROL_SHEET_ID }}"
         },
-        "options": {}
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Assistant Control"
+        },
+        "options": {
+          "returnAllMatches": true
+        }
+      },
+      "id": "read-control",
+      "name": "Read Assistant Control",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -660,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_IN_N8N",
+          "name": "Google Sheets OAuth2"
+        }
       }
     },
     {
-      "id": "invoke-gateway",
-      "name": "Invoke S-OS Command Gateway",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "parameters": {
+        "jsCode": "const active = new Set(['active', 'in progress', 'pending', 'ready', 'blocked', 'obsolete', 'cancelled', 'canceled']);\nconst priorityRank = value => {\n  const p = String(value ?? '').trim().toLowerCase();\n  if (['p0', 'urgent'].includes(p)) return 0;\n  if (['p1', 'high'].includes(p)) return 1;\n  if (['p2', 'medium'].includes(p)) return 2;\n  if (['p3', 'low'].includes(p)) return 3;\n  return 4;\n};\nconst parseTime = value => {\n  const ms = Date.parse(String(value ?? '').trim());\n  return Number.isFinite(ms) ? ms : 0;\n};\nconst triggerCooldown = value => {\n  const trigger = String(value ?? '').trim().toLowerCase();\n  if (trigger.includes('daily')) return 23 * 60 * 60 * 1000;\n  if (trigger.includes('hour')) return 55 * 60 * 1000;\n  if (trigger.includes('new/changed') || trigger.includes('event-driven')) return Infinity;\n  return 55 * 60 * 1000;\n};\nconst acceptanceIds = new Set(String($env.ASSISTANT_ACCEPTANCE_TASK_IDS || '').split(',').map(s => s.trim()).filter(Boolean));\nconst now = Date.now();\nconst seenTaskIds = new Set();\nconst eligible = [];\nfor (const [inputIndex, item] of $input.all().entries()) {\n  const row = item.json;\n  const status = String(row.Status ?? row.status ?? '').trim().toLowerCase();\n  if (!active.has(status)) continue;\n  const rowNumber = row.row_number ?? row.rowNumber;\n  if (rowNumber === undefined || rowNumber === null || String(rowNumber).trim() === '') continue;\n  const taskId = String(row['Task ID'] ?? row.task_id ?? row.ID ?? row.id ?? '').trim();\n  if (!taskId || seenTaskIds.has(taskId)) continue;\n  if (acceptanceIds.size && !acceptanceIds.has(taskId)) continue;\n  if (taskId) seenTaskIds.add(taskId);\n  const lastFollowUp = parseTime(row['Last Follow-up'] ?? row.last_follow_up);\n  const updatedAt = parseTime(row['Updated At'] ?? row.updated_at);\n  const changedSinceFollowUp = Boolean(updatedAt && (!lastFollowUp || updatedAt > lastFollowUp));\n  const lastDisposition = String(row['Follow-up Disposition'] ?? row.follow_up_disposition ?? '').trim().toLowerCase();\n  if (lastDisposition === 'delivery_failed' && !changedSinceFollowUp) continue;\n  if (lastFollowUp && !changedSinceFollowUp) {\n    const ageMs = Math.max(0, now - lastFollowUp);\n    if (lastDisposition === 'execute' && ageMs < 4 * 60 * 60 * 1000) continue;\n    if (lastDisposition === 'escalate' && ageMs < 24 * 60 * 60 * 1000) continue;\n    const cooldownMs = triggerCooldown(row['Follow-up Trigger'] ?? row.follow_up_trigger);\n    if (!Number.isFinite(cooldownMs) || ageMs < cooldownMs) continue;\n  }\n  eligible.push({\n    pairedItem: { item: inputIndex },\n    json: {\n      ...row,\n      _rowNumber: rowNumber,\n      _runId: $execution.id,\n      _readAt: new Date().toISOString(),\n      _selection: { taskId, priorityRank: priorityRank(row.Priority ?? row.priority), changedSinceFollowUp }\n    }\n  });\n}\neligible.sort((a, b) => {\n  const byPriority = a.json._selection.priorityRank - b.json._selection.priorityRank;\n  if (byPriority) return byPriority;\n  const aLast = parseTime(a.json['Last Follow-up'] ?? a.json.last_follow_up);\n  const bLast = parseTime(b.json['Last Follow-up'] ?? b.json.last_follow_up);\n  if (aLast !== bLast) return aLast - bLast;\n  return String(a.json._selection.taskId).localeCompare(String(b.json._selection.taskId));\n});\nreturn eligible.slice(0, 5);"
+      },
+      "id": "active-only",
+      "name": "Keep Active Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        800,
-        320
-      ],
+        -420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const r = $json;\nconst text = (...keys) => keys.map(k => r[k]).find(v => v !== undefined && v !== null) ?? '';\nconst yes = v => /^(yes|true|1|approved|authorized)(\\b|\\s|—|-|:)/i.test(String(v).trim());\nconst value = String(text('Has Value','has_value','Value')).trim().toLowerCase();\nconst status = String(text('Status','status')).trim().toLowerCase();\nconst next = String(text('Next Action','next_action')).trim();\nconst sensitive = yes(text('Sensitive Permission','sensitive_permission'));\nconst cost = yes(text('New Cost','new_cost','Purchase Required'));\nconst ownerJudgment = yes(text('Owner Judgment','owner_judgment','Final Submission'));\nconst decisionRequired = yes(text('Outcome Decision Required','decision_required'));\nlet owner = String(text('Execution Owner','execution_owner','Owner','owner')).trim();\nif (!owner && value !== 'no' && !['obsolete','cancelled','canceled'].includes(status)) owner = 'S/PM Orchestration';\nlet disposition = 'hold';\nlet reason = 'Waiting silently; no authorized executable next action.';\nif (value === 'no' || ['obsolete','cancelled','canceled'].includes(status)) { owner = ''; disposition = 'archive'; reason = 'Task is obsolete or has no remaining value.'; }\nelse if (sensitive || cost || ownerJudgment || decisionRequired) { disposition = 'escalate'; reason = sensitive ? 'Sensitive permission required.' : cost ? 'New cost or purchase required.' : ownerJudgment ? 'Final owner-only judgment or submission required.' : 'Outcome-changing decision required.'; }\nelse if (yes(text('Authorized','authorized')) && next && String(text('Approval Status')).trim().toLowerCase() === 'approved' && String(text('Approval Reference')).trim() && Number.isFinite(Date.parse(String(text('Updated At')).trim())) && ('ac:' + String(text('Task ID','task_id','ID','id')) + ':' + String(text('Updated At')).trim()).length <= 128) { disposition = 'execute'; reason = 'Next action is clear and authorized.'; }\nreturn { json: { ...r, 'Execution Owner': owner, _followUp: { disposition, reason, owner, nextAction: next, taskId: String(text('Task ID','task_id','ID','id')), runId: r._runId, readAt: r._readAt, approvalReference: String(text('Approval Reference')).trim(), revision: String(text('Updated At')).trim(), idempotencyKey: 'ac:' + String(text('Task ID','task_id','ID','id')) + ':' + String(text('Updated At')).trim() } } };"
+      },
+      "id": "classify",
+      "name": "Assign Owner and Decide",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json._followUp.disposition }}",
+                    "rightValue": "execute",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "execute"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json._followUp.disposition }}",
+                    "rightValue": "escalate",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "escalate"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json._followUp.disposition }}",
+                    "rightValue": "archive",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "archive"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "route",
+      "name": "Route Disposition",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        60,
+        0
+      ]
+    },
+    {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.S_AGENTOS_COMMAND_URL || 'http://localhost:5678/webhook/s-agentos-command' }}",
+        "url": "={{ $env.S_AGENTOS_COMMAND_URL }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -119,41 +190,345 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify($json) }}",
+        "body": "={{ JSON.stringify({action:'execute_task', objective:$json._followUp.nextAction, requested_by:'S-PASS-20260911-005', priority: $json._selection.priorityRank === 0 ? 'urgent' : $json._selection.priorityRank === 1 ? 'high' : 'normal', run_mode:'live', approval_status:'approved', idempotency_key:$json._followUp.idempotencyKey, context:{source:'Assistant Control', taskId:$json._followUp.taskId, owner:$json._followUp.owner, runId:$json._followUp.runId, revision:$json._followUp.revision, approval_reference:$json._followUp.approvalReference}}) }}",
         "options": {
-          "timeout": 30000
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
         }
+      },
+      "id": "worker",
+      "name": "Route to Worker",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        340,
+        -240
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ASSISTANT_SEIF_ESCALATION_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {taskId:$json._followUp.taskId, decision:$json._followUp.reason, runId:$json._followUp.runId, idempotency_key:'decision:'+$json._followUp.taskId+':'+$json._followUp.revision} }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.ASSISTANT_SEIF_ESCALATION_TOKEN }}"
+            }
+          ]
+        }
+      },
+      "id": "escalate",
+      "name": "Escalate Decision to Seif",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        340,
+        -80
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return { json: { ...$json, Status: 'Archived', _evidence: 'Archived by hourly follow-up engine' } };"
+      },
+      "id": "archive",
+      "name": "Archive Obsolete Definition",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return { json: { ...$json, _evidence: 'No escalation; held silently' } };"
+      },
+      "id": "silent",
+      "name": "Keep Working Silently",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.ASSISTANT_CONTROL_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Assistant Activity"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Run ID": "={{ $('Assign Owner and Decide').item.json._followUp.runId }}",
+            "Task ID": "={{ $('Assign Owner and Decide').item.json._followUp.taskId }}",
+            "Timestamp": "={{ $now.toISO() }}",
+            "Disposition": "={{ $json._delivery.disposition }}",
+            "Execution Owner": "={{ $('Assign Owner and Decide').item.json._followUp.owner }}",
+            "Reason": "={{ $('Assign Owner and Decide').item.json._followUp.reason }}",
+            "Outcome": "={{ $json._delivery.outcome }}",
+            "Evidence URL": "={{ $execution.url }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "audit",
+      "name": "Append Redacted Audit Evidence",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        640,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_IN_N8N",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.ASSISTANT_CONTROL_SHEET_ID }}"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Assistant Control"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": "={{ $('Assign Owner and Decide').item.json._rowNumber }}",
+            "Execution Owner": "={{ $('Assign Owner and Decide').item.json._followUp.owner }}",
+            "Last Follow-up": "={{ $now.toISO() }}",
+            "Follow-up Disposition": "={{ $('Verify Delivery Receipt').item.json._delivery.disposition }}",
+            "Status": "={{ $('Assign Owner and Decide').item.json._followUp.disposition === 'archive' ? 'Archived' : $('Assign Owner and Decide').item.json.Status }}",
+            "Evidence Link": "={{ $execution.url }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ]
+        },
+        "options": {}
+      },
+      "id": "link-evidence",
+      "name": "Link Evidence to Assistant Control",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        880,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_IN_N8N",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "id": "verify-delivery",
+      "name": "Verify Delivery Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const source = $('Assign Owner and Decide').item.json;\nconst f = source._followUp;\nconst body = $json.body || {};\nconst receipt = body.receipt || {};\nconst httpOK = Number($json.statusCode) >= 200 && Number($json.statusCode) < 300;\nconst local = f.disposition === 'archive' || f.disposition === 'hold';\nconst bound = httpOK && body.ok === true && receipt.taskId === f.taskId && String(receipt.runId) === String(f.runId) && typeof receipt.id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(receipt.id);\nconst accepted = local || (bound && (f.disposition !== 'execute' || (receipt.idempotency_key === f.idempotencyKey && receipt.approval_reference === f.approvalReference && ['accepted','completed'].includes(receipt.status))));\nreturn {json:{...source, _delivery:{accepted, disposition: accepted ? f.disposition : 'delivery_failed', outcome: local ? (f.disposition === 'archive' ? 'Archived' : 'Held silently') : accepted ? 'Receipt ' + receipt.id : 'Delivery unverified; reconcile before retry', receiptId: accepted && !local ? receipt.id : null}}};"
       }
     }
   ],
   "connections": {
-    "Hourly Trigger": {
+    "Every Hour": {
       "main": [
         [
           {
-            "node": "Build Orchestrator Command",
+            "node": "Read Assistant Control",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "On-Demand Trigger": {
+    "Manual Evidence Run": {
       "main": [
         [
           {
-            "node": "Build Orchestrator Command",
+            "node": "Read Assistant Control",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Orchestrator Command": {
+    "Read Assistant Control": {
       "main": [
         [
           {
-            "node": "Invoke S-OS Command Gateway",
+            "node": "Keep Active Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Active Rows": {
+      "main": [
+        [
+          {
+            "node": "Assign Owner and Decide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assign Owner and Decide": {
+      "main": [
+        [
+          {
+            "node": "Route Disposition",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Disposition": {
+      "main": [
+        [
+          {
+            "node": "Route to Worker",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Escalate Decision to Seif",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Archive Obsolete Definition",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Keep Working Silently",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route to Worker": {
+      "main": [
+        [
+          {
+            "node": "Verify Delivery Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalate Decision to Seif": {
+      "main": [
+        [
+          {
+            "node": "Verify Delivery Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archive Obsolete Definition": {
+      "main": [
+        [
+          {
+            "node": "Verify Delivery Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Working Silently": {
+      "main": [
+        [
+          {
+            "node": "Verify Delivery Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Redacted Audit Evidence": {
+      "main": [
+        [
+          {
+            "node": "Link Evidence to Assistant Control",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Delivery Receipt": {
+      "main": [
+        [
+          {
+            "node": "Append Redacted Audit Evidence",
             "type": "main",
             "index": 0
           }
@@ -163,12 +538,15 @@
   },
   "settings": {
     "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
     "timezone": "Asia/Dubai"
   },
-  "tags": [
-    "s-os",
-    "orchestrator",
-    "hourly",
-    "on-demand"
-  ]
+  "active": false,
+  "versionId": "0a381b39-b511-48c2-a4d3-72d5759ca083",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
 }

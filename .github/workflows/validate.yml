@@ -18,6 +18,11 @@ jobs:
             jq empty "$file"
           done
 
+      - name: Assistant Control routing and receipt regression tests
+        run: |
+          node scripts/validate-assistant-follow-up.mjs
+          node --test tests/assistant-follow-up.test.mjs
+
       - name: Validate docker compose
         run: |
           cp .env.example .env
@@ -28,3 +33,4 @@ jobs:
 
       - name: Shell syntax
         run: bash -n scripts/*.sh
+
