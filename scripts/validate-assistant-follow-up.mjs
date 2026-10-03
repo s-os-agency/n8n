@@ -1,15 +1,15 @@
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 
-const workflow = JSON.parse(readFileSync('workflows/assistant-control-hourly-follow-up.json', 'utf8'));
+const workflow = JSON.parse(readFileSync('workflows/s-orchestrator-hourly.json', 'utf8'));
 const selectionNode = workflow.nodes.find((node) => node.name === 'Keep Active Rows');
 const decisionNode = workflow.nodes.find((node) => node.name === 'Assign Owner and Decide');
 assert(selectionNode, 'Keep Active Rows node missing');
 assert(decisionNode, 'Assign Owner and Decide node missing');
 
 function select(rows) {
-  const evaluate = new Function('$input', '$execution', selectionNode.parameters.jsCode);
-  return evaluate({ all: () => rows.map((json) => ({ json })) }, { id: 'validation-run' }).map((item) => item.json);
+  const evaluate = new Function('$input', '$execution', '$env', selectionNode.parameters.jsCode);
+  return evaluate({ all: () => rows.map((json) => ({ json })) }, { id: 'validation-run' }, {}).map((item) => item.json);
 }
 
 function decide(row) {
@@ -48,7 +48,7 @@ const annotatedGate = decide({
 });
 assert.equal(annotatedGate._followUp.disposition, 'escalate');
 
-const execute = decide({ 'Task ID': 'execute', Status: 'Active', 'Has Value': 'yes', Authorized: 'yes', 'Next Action': 'Do reversible work' });
+const execute = decide({ 'Approval Status':'approved', 'Approval Reference':'approval-fixture', 'Updated At':'2026-10-03T00:00:00Z', 'Task ID': 'execute', Status: 'Active', 'Has Value': 'yes', Authorized: 'yes', 'Next Action': 'Do reversible work' });
 assert.equal(execute._followUp.disposition, 'execute');
 const hold = decide({ 'Task ID': 'hold', Status: 'Pending', 'Has Value': 'yes', Authorized: 'no' });
 assert.equal(hold._followUp.disposition, 'hold');
@@ -57,3 +57,4 @@ assert.equal(archive._followUp.disposition, 'archive');
 
 assert.equal(workflow.active, false, 'workflow must remain inactive in source control until governed credential binding/live acceptance');
 console.log('Assistant follow-up safety validation: PASS');
+
