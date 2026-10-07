@@ -1,5 +1,10 @@
 # n8n Operating Stack
 
+Version policy: all n8n and runner images use the explicit pin in
+[.n8n-version](.n8n-version). See [VERSION.md](VERSION.md) before deploying or
+recovering an existing instance; the running production version is unverified.
+
+
 [![Stack](https://img.shields.io/badge/part%20of-Operator%20Stack-0f766e)](docs/ECOSYSTEM.md)
 [![Pairs with](https://img.shields.io/badge/control%20plane-S--OS-blue)](https://github.com/saifsoub/S-OS)
 [![Cockpit](https://img.shields.io/badge/cockpit-AgentEmpire-purple)](https://github.com/saifsoub/AgentEmpire)
@@ -178,3 +183,4 @@ This repository is designed for:
 - real workflow execution
 - persistent automation
 - zero-fluff infrastructure
+

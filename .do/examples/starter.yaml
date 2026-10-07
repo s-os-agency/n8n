@@ -14,7 +14,7 @@ services:
       registry_type: GHCR
       registry: ghcr.io
       repository: n8n-io/n8n
-      tag: "latest"  # Use "latest" for newest features, or pin to specific version (e.g., "2.3.2") for stability
+      tag: "2.3.2"  # Must match .n8n-version (validated in CI)
     http_port: 5678
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-1gb
@@ -111,3 +111,4 @@ databases:
     version: "17"
     production: false
     cluster_name: n8n-postgres
+

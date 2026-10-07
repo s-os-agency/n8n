@@ -43,11 +43,14 @@ Reconcile the canonical command, lease and effect receipt before retrying any
 interrupted work. Do not remove volumes as part of recovery. This local stack has
 no queue worker service; Redis availability alone does not enable queue mode.
 
-Before production recovery, record the deployed n8n version and pin
-`N8N_VERSION` to that verified version. The example's `latest` value is not a
-production release selection.
+Before production recovery, capture the running version and image digest using
+[VERSION.md](../VERSION.md). The repository pin is a configuration baseline,
+not evidence of the live version. If the deployed version differs, stop before
+recreating containers: reconcile the pin and test migration or restore first.
+Never start 2.3.2 against a database already migrated by a newer version.
 
 ```bash
 docker compose -f docker-compose.local.yml restart
 bash scripts/healthcheck.sh
 ```
+
