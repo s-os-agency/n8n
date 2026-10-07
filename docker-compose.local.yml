@@ -27,7 +27,8 @@ services:
       retries: 5
 
   n8n:
-    image: n8nio/n8n:${N8N_VERSION}
+    # Kept in sync with .n8n-version by CI; environment cannot override this tag.
+    image: n8nio/n8n:2.3.2
     restart: unless-stopped
     ports:
       - "${N8N_BIND_ADDRESS:-127.0.0.1}:${N8N_PORT:-5678}:5678"
@@ -62,3 +63,4 @@ volumes:
   postgres_data:
   redis_data:
   n8n_data:
+

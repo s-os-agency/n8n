@@ -12,6 +12,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate n8n version policy
+        run: |
+          python3 -m pip install 'PyYAML==6.0.3'
+          python3 scripts/validate-versions.py
+
       - name: Validate workflow JSON files
         run: |
           find workflows -name '*.json' -print0 | while IFS= read -r -d '' file; do
@@ -33,4 +38,5 @@ jobs:
 
       - name: Shell syntax
         run: bash -n scripts/*.sh
+
 

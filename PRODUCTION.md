@@ -1,5 +1,10 @@
 # Production Deployment Guide
 
+Version policy: all n8n and runner images use the explicit pin in
+[.n8n-version](.n8n-version). See [VERSION.md](VERSION.md) before deploying or
+recovering an existing instance; the running production version is unverified.
+
+
 This guide covers best practices for deploying n8n to production on DigitalOcean App Platform.
 
 ## 🔒 Security Hardening
@@ -1090,3 +1095,4 @@ See [SCALING.md](SCALING.md) for step-by-step migration guide from Simple to Que
 - Connection pool tuning
 
 See [SCALING.md](SCALING.md) for complete cost optimization strategies.
+

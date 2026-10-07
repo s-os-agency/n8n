@@ -1,5 +1,10 @@
 # Deploy n8n to DigitalOcean App Platform
 
+Version policy: all n8n and runner images use the explicit pin in
+[.n8n-version](.n8n-version). See [VERSION.md](VERSION.md) before deploying or
+recovering an existing instance; the running production version is unverified.
+
+
 This guide explains how to deploy n8n to DigitalOcean App Platform using the Deploy-to-DO button.
 
 ## 🚀 One-Click Deployment
@@ -301,3 +306,4 @@ For production workloads:
 ---
 
 **Ready to automate?** Click the Deploy button above and start building workflows! 🚀
+
