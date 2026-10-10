@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>برنامج سيف — إعداداتي</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#18312e;background:#f4f6f2}*{box-sizing:border-box}body{margin:0}main{max-width:850px;margin:auto;padding:36px 20px}header{padding:26px 0}small{color:#57706a}h1{font-size:36px;margin:12px 0}p{line-height:1.8}.panel,article{background:white;border:1px solid #dbe4de;border-radius:20px;padding:24px;margin:16px 0}.line{display:flex;gap:12px;flex-wrap:wrap;align-items:center}input,select,button{font:inherit;padding:12px;border-radius:10px;border:1px solid #b8ccc3}input,select{background:#fff;min-width:0}button{cursor:pointer;background:#eaf0ea;color:#18312e}button.primary{background:#1c5b4d;color:white;border-color:#1c5b4d}button.delete{color:#9f3030;background:white}label{display:block;margin:12px 0 6px}input[type=text]{width:100%}input[type=checkbox]{width:24px;height:24px}h2{font-size:20px;margin:0 0 12px}.grow{flex:1}#notice{min-height:28px;color:#315e50}.empty{padding:22px;text-align:center;color:#57706a}.badge{background:#f1e9cb;padding:5px 10px;border-radius:8px;font-size:13px}footer{font-size:13px;color:#57706a;line-height:1.8}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #d6a747;outline-offset:3px}@media(max-width:500px){main{padding:20px 14px}h1{font-size:29px}.panel,article{padding:18px}}
+</style>
+<main>
+<header><small>S/ · برنامج سيف</small><h1>إعداداتي، على كيفي.</h1><p>تحكم بشغل البرنامج، فترات التنفيذ، الحسابات، الدفع والربط الخارجي من مكان واحد.</p></header>
+<section class="panel"><h2>حالة التشغيل</h2><p>محرك Python بيشغّل الإنترفال حتى لو سكّرت الصفحة، طول ما عملية Python شغّالة. تنفيذ المهمة الخارجية بيحتاج عنوان مزود HTTPS وتعريف المهمة. ما في ربط مالي مفعّل حالياً.</p><p>حط مرجع البطاقة ومفاتيح الربط الموجودة عند مزودك. لا تدخل رقم البطاقة الكامل أو CVV أو مفتاح محفظة خاص.</p></section>
+<section class="panel"><h2>أضف إعداد جديد</h2><form id="add">
+<label for="name">اسم الإعداد</label><input id="name" type="text" required maxlength="100" placeholder="مثلاً: اللغة، التنبيهات، طريقة العرض">
+<label for="type">نوع الإعداد</label><select id="type"><option value="choice">خيارات من اختياري</option><option value="toggle">تشغيل / إيقاف</option><option value="text">نص حر</option></select>
+<div id="choicesWrap"><label for="choices">الخيارات — افصل بينهم بفاصلة</label><input id="choices" type="text" placeholder="اكتب خياراتك هون"></div>
+<p><button class="primary" type="submit">أضف الإعداد</button></p></form></section>
+<section class="panel"><h2>n8n</h2><p id="n8nStatus" role="status">فحص n8n…</p><a id="n8nOpen" href="http://127.0.0.1:5678" target="_blank" rel="noopener">افتح n8n</a> · <a href="https://github.com/s-os-agency/n8n" target="_blank" rel="noopener">مستودع GitHub</a><p>رابط Webhook للمهمة بتحطه بإعداد عنوان الربط؛ المهمة بتتنفذ حسب الإنترفال بعد تفعيلها.</p></section><section class="panel"><h2>محرك Python</h2><p id="runtimeStatus" role="status">قراءة حالة المحرك…</p><p>التغييرات بتنرسل تلقائياً لمحرك Python.</p><p>الفترة بالثواني. تشغيل / إيقاف التنفيذ الدوري يتحكم بإرسال المهمة للمزود؛ الإنترفال نفسه بيضل شغّال. القيم غير المحددة بتترك التنفيذ الخارجي مطفّي.</p></section><section aria-label="إعداداتي" id="list"></section>
+<section class="panel"><h2>نسختي الخاصة</h2><div class="line"><button id="export">تنزيل نسخة من إعداداتي</button><button id="import">استرجاع نسخة</button></div><input id="file" type="file" accept="application/json,.json" hidden><p id="notice" role="status" aria-live="polite"></p></section>
+<footer>بيشتغل بمتصفحك بدون حساب. الحفظ تلقائي في نفس المتصفح لما يكون التخزين متاح؛ نزّل نسخة للاحتفاظ بإعداداتك أو نقلها لجهاز ثاني. معلومات الحساب اللي بتدخلها محفوظة بهالمتصفح ضمن الإعدادات؛ النسخة المنزلة بتحتوي القيم اللي أدخلتها.</footer>
+</main>
+<script>
+'use strict';
+const KEY='seif.settings.v1';
+const seed=[
+ ['work','شو ينفذ البرنامج','text',[],null],
+ ['interval','الفترة بين مرات التنفيذ (بالثواني)','text',[],'60'],
+ ['enabled','التنفيذ الدوري','toggle',[],null],
+ ['provider','الجهة المربوطة / مزود الخدمة','text',[],null],
+ ['endpoint','عنوان الربط الخارجي HTTPS','text',[],null],
+ ['credential','مرجع بيانات الربط المحفوظة بالخزنة','text',[],null],
+ ['method','طريقة الدفع / استلام الدخل','choice',['حساب بنكي / IBAN','بطاقة مرتبطة عند مزود الدفع','كريبتو'],null],
+ ['account','مرجع الحساب المرتبط','text',[],null],
+ ['iban','IBAN لحساب الاستلام','text',[],null],
+ ['card','مرجع البطاقة عند مزود الدفع (Token)','text',[],null],
+ ['wallet','عنوان المحفظة العامة','text',[],null],
+ ['network','شبكة الكريبتو والعملة','text',[],null],
+ ['currency','عملة الدخل','text',[],null]
+].map(([id,name,type,options,initial])=>({id,name,type,options,initial,value:initial}));
+let settings=seed;
+const $=id=>document.getElementById(id);
+function notice(t){$('notice').textContent=t}
+function validate(data){
+ if(!Array.isArray(data)||data.length>200)throw Error('صيغة النسخة مش مناسبة');
+ const ids=new Set();
+ for(const s of data){
+  if(!s||typeof s.id!=='string'||ids.has(s.id)||typeof s.name!=='string'||!s.name.trim()||s.name.length>100||!['choice','toggle','text'].includes(s.type))throw Error('الإعدادات بالنسخة مش مكتملة');
+  ids.add(s.id);
+  if(s.type==='choice'&&(!Array.isArray(s.options)||!s.options.length||s.options.length>100||s.options.some(x=>typeof x!=='string'||!x.trim()||x.length>200)||new Set(s.options).size!==s.options.length))throw Error('راجع قائمة الخيارات');
+  for(const v of [s.value,s.initial])if(s.type==='toggle'?!(v===null||typeof v==='boolean'):s.type==='choice'?!(v===null||s.options.includes(v)):!(v===null||typeof v==='string'&&v.length<=5000))throw Error('راجع قيمة الإعداد');
+ }
+ return data;
+}
+let syncTimer;
+function save(){clearTimeout(syncTimer);syncTimer=setTimeout(syncRuntime,700);try{localStorage.setItem(KEY,JSON.stringify(settings));notice('انحفظت إعداداتك في هالمتصفح.')}catch{notice('التخزين مش متاح بهالمتصفح؛ نزّل نسخة عشان تحتفظ بإعداداتك.')}}
+function el(tag,text){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;return e}
+function button(text,fn,cls){const b=el('button',text);b.type='button';b.onclick=fn;if(cls)b.className=cls;return b}
+function render(){
+ $('list').replaceChildren();
+ if(!settings.length){const p=el('p','لسه ما أضفت إعدادات. أول إعداد وخياراته من اختيارك.');p.className='empty';$('list').append(p)}
+ for(const s of settings){
+  const card=el('article'),heading=el('div');heading.className='line';const title=el('h2',s.name);title.className='grow';heading.append(title,button('شيل الإعداد',()=>{settings=settings.filter(x=>x.id!==s.id);save();render()},'delete'));card.append(heading);
+  const label=el('label','القيمة الحالية');label.htmlFor='value-'+s.id;card.append(label);
+  let control;
+  if(s.type==='choice'){control=el('select');const empty=el('option','اختار القيمة');empty.value='';control.append(empty);for(const o of s.options){const opt=el('option',o);opt.value=o;control.append(opt)}control.value=s.value??'';control.onchange=()=>{s.value=control.value||null;save()};}
+  else if(s.type==='toggle'){control=el('select');for(const [v,t] of [['','اختار الحالة'],['on','تشغيل'],['off','إيقاف']]){const o=el('option',t);o.value=v;control.append(o)}control.value=s.value===null?'':s.value?'on':'off';control.onchange=()=>{s.value=control.value===''?null:control.value==='on';save()};}
+  else{control=el('input');control.type='text';control.maxLength=5000;control.value=s.value??'';control.oninput=()=>{s.value=control.value;save()};}
+  control.id='value-'+s.id;card.append(control);
+  const start=el('p','بيبدأ على: '+(s.initial===null?'لسه ما حددت':s.type==='toggle'?(s.initial?'تشغيل':'إيقاف'):s.initial));card.append(start);
+  const actions=el('div');actions.className='line';actions.append(button('خلّيه يبدأ على هاي القيمة',()=>{if(s.value===null){notice('اختار قيمة أول.');return}s.initial=s.value;save();render()},'primary'),button('ارجع لقيمة البداية',()=>{s.value=s.initial;save();render()}));card.append(actions);
+  if(s.type==='choice'){
+   const l=el('label','عدّل الخيارات، أضف أو شيل');l.htmlFor='options-'+s.id;const input=el('input');input.type='text';input.id=l.htmlFor;input.value=s.options.join('، ');card.append(l,input,button('احفظ الخيارات',()=>{const opts=parseOptions(input.value);if(!opts.length||opts.length>100||opts.some(x=>x.length>200)){notice('اكتب من خيار واحد إلى ١٠٠ خيار، كل واحد أقل من ٢٠١ حرف.');return}s.options=opts;if(!opts.includes(s.value))s.value=null;if(!opts.includes(s.initial))s.initial=null;save();render()}));
+  }
+  $('list').append(card);
+ }
+}
+function parseOptions(v){return [...new Set(v.split(/[,،\n]/).map(x=>x.trim()).filter(Boolean))]}
+$('type').onchange=()=>{$('choicesWrap').hidden=$('type').value!=='choice'};
+$('add').onsubmit=e=>{e.preventDefault();const name=$('name').value.trim(),type=$('type').value,options=parseOptions($('choices').value);if(!name){notice('اكتب اسم الإعداد.');return}if(settings.length>=200){notice('وصلت لـ٢٠٠ إعداد.');return}if(type==='choice'&&(!options.length||options.length>100||options.some(x=>x.length>200))){notice('اكتب الخيارات أول، كل خيار أقل من ٢٠١ حرف.');return}settings.push({id:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),name,type,options:type==='choice'?options:[],value:null,initial:null});$('add').reset();$('choicesWrap').hidden=false;save();render()};
+$('export').onclick=()=>{const blob=new Blob([JSON.stringify({version:1,settings},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=el('a');a.href=url;a.download='seif-settings.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notice('تم طلب تنزيل نسخة إعداداتك.')};
+$('import').onclick=()=>$('file').click();
+$('file').onchange=async()=>{const f=$('file').files[0];if(!f)return;try{if(f.size>2000000)throw Error('النسخة أكبر من الحجم المسموح');const d=JSON.parse(await f.text());if(d.version!==1)throw Error('نسخة غير مدعومة');const incoming=validate(d.settings);settings=incoming;save();render();}catch(e){notice(e instanceof SyntaxError?'الملف مش نسخة إعدادات صحيحة.':e.message)}$('file').value=''};
+try{const raw=localStorage.getItem(KEY);if(raw)settings=validate(JSON.parse(raw));for(const s of settings)s.value=s.initial;}catch{notice('ما قدرت أقرأ الحفظ السابق؛ فيك تسترجع نسخة.');}
+render();
+const runtimeValue=id=>settings.find(s=>s.id===id)?.value;
+async function runtimeStatus(){try{const r=await fetch('/api/status');if(!r.ok)throw Error();const d=await r.json();$('runtimeStatus').textContent='الإنترفال: '+d.interval_seconds+' ثانية · عدد الدورات: '+d.ticks+' · إرسال المهمة: '+(d.dispatch_enabled?'شغّال':'مطفّي')+' · '+d.last_result;return d}catch{$('runtimeStatus').textContent='افتح الواجهة من عنوان Python بعد تشغيل server.py.'}}
+async function syncRuntime(){try{const interval=Number(runtimeValue('interval'));if(!Number.isInteger(interval)||interval<1||interval>86400)throw Error('حدد الفترة بين ١ و٨٦٤٠٠ ثانية.');const r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-Seif-Token':'__SEIF_CSRF__'},body:JSON.stringify({interval_seconds:interval,dispatch_enabled:runtimeValue('enabled')===true,endpoint:runtimeValue('endpoint')||'',task:runtimeValue('work')||'',settings})});const d=await r.json();if(!r.ok)throw Error(d.error||'ما تم تطبيق الإعدادات');notice('الإعدادات مطبقة على Python.');await runtimeStatus()}catch(e){notice(e.message)}};
+async function loadRuntime(){const d=await runtimeStatus();if(d?.settings?.length){settings=validate(d.settings);render()} }
+async function n8nStatus(){try{const r=await fetch('/api/n8n');const d=await r.json();$('n8nStatus').textContent=d.healthy?'n8n متاح':'n8n لسه مش متاح';$('n8nOpen').href=d.ui_url}catch{$('n8nStatus').textContent='فحص n8n غير متاح'}}
+loadRuntime();n8nStatus();setInterval(runtimeStatus,3000);setInterval(n8nStatus,10000);
+</script>
+</html>
