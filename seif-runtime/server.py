@@ -6,6 +6,7 @@ import signal
 import threading
 import time
 import urllib.request
+from urllib.parse import urlparse
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -89,6 +90,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.allowed():
             return self.send(403, {'error': 'invalid host'})
+        if self.path == '/api/payment':
+            with LOCK:
+                link = next((x.get('value') for x in STATE['settings'] if x.get('id') == 'payment_link'), '') or ''
+            parsed = urlparse(link)
+            supported = parsed.scheme == 'https' and parsed.hostname in {'paypal.com', 'www.paypal.com', 'paypal.me', 'www.paypal.me'} and not parsed.username and not parsed.password
+            return self.send(200, {'configured': supported, 'checkout_url': link if supported else None, 'payment_received': None})
         if self.path == '/api/n8n':
             healthy = False
             try:
@@ -126,8 +133,13 @@ class Handler(BaseHTTPRequestHandler):
             if enabled and (not endpoint or not body.get('task', '').strip()):
                 raise ValueError('define task and provider endpoint before dispatch')
             settings = body.get('settings', [])
-            if not isinstance(settings, list) or len(settings) > 200:
+            if not isinstance(settings, list) or len(settings) > 200 or any(not isinstance(x, dict) for x in settings):
                 raise ValueError('invalid settings')
+            payment_link = next((x.get('value') for x in settings if x.get('id') == 'payment_link'), '') or ''
+            if payment_link:
+                parsed = urlparse(payment_link)
+                if parsed.scheme != 'https' or parsed.hostname not in {'paypal.com', 'www.paypal.com', 'paypal.me', 'www.paypal.me'} or parsed.username or parsed.password:
+                    raise ValueError('use the original HTTPS PayPal payment link')
             with LOCK:
                 STATE.update(interval_seconds=interval, dispatch_enabled=enabled, endpoint=endpoint,
                              task=body.get('task', ''), settings=settings)
