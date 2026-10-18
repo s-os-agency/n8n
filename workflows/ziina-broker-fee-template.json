@@ -1,0 +1,116 @@
+{
+  "name": "Ziina Broker Fee Capture (template)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "s-agency/ziina/broker-fee/confirm",
+        "responseMode": "responseNode"
+      },
+      "name": "Ziina Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event_type || $json.status || '' }}.toLowerCase()",
+              "operation": "equals",
+              "value2": "paid"
+            }
+          ]
+        }
+      },
+      "name": "Is Paid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SOS_GATEWAY_URL }}/v1/payments/ziina/confirm",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "provider": "ziina",
+          "payment_id": "={{ $json.payment_id || $json.id }}.toString()",
+          "amount_aed": "={{ $json.amount }}.toNumber()",
+          "currency": "AED",
+          "lead_id": "={{ $json.metadata.lead_id || '' }}.toString()",
+          "broker_fee_type": "={{ $json.metadata.fee_type || 'flat' }}.toString()",
+          "received_at": "={{ $json.created_at || $now.toISO() }}.toString()"
+        }
+      },
+      "name": "Forward to S-OS Gateway",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, -80],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "S-OS Gateway Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_OWNER_CHAT_ID }}.toString()",
+        "text": "Ziina broker fee received: AED {{ $json.amount }} for lead {{ $json.metadata.lead_id || 'n/a' }}. Payment ID {{ $json.payment_id || $json.id }}."
+      },
+      "name": "Notify Owner (Telegram)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [440, 120],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Ziina Webhook": {
+      "main": [
+        [
+          {
+            "node": "Is Paid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Paid?": {
+      "main": [
+        [
+          {
+            "node": "Forward to S-OS Gateway",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Owner (Telegram)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Owner (Telegram)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
