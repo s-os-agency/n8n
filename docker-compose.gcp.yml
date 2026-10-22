@@ -1,0 +1,79 @@
+# n8n stack for the GCP VM (34.139.100.169)
+# Canonical compose for the live instance. DigitalOcean specs are in zz-ARCHIVE/digitalocean/.
+#
+# Usage on the box:
+#   docker compose -f docker-compose.gcp.yml up -d
+#
+# Notes:
+# - Image tag must match .n8n-version (currently 2.42.3 on the running box;
+#   repo pin is 2.3.2 — reconcile before next upgrade).
+# - Bound to 127.0.0.1 only. Reach via Tailscale 100.86.90.80:5678.
+# - Postgres/Redis expected from host .env; swap for MariaDB later if desired.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${Postgres_USER}
+      POSTGRES_PASSWORD: ${Postgres_PASSWORD}
+      POSTGRES_DB: ${Postgres_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$Postgres_USER\" -d \"$$Postgres_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  n8n:
+    image: n8nio/n8n:2.42.3
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"
+    env_file:
+      - .env
+    environment:
+      N8N_PORT: 5678
+      DB_TYPE: postgresdb
+      DB_PostgresDB_HOST: postgres
+      DB_PostgresDB_PORT: 5432
+      DB_PostgresDB_DATABASE: ${Postgres_DB}
+      DB_PostgresDB_USER: ${Postgres_USER}
+      DB_PostgresDB_PASSWORD: ${Postgres_PASSWORD}
+      QUEUE_BULL_REDIS_HOST: redis
+      QUEUE_BULL_REDIS_PORT: 6379
+      GENERIC_TIMEZONE: Asia/Dubai
+      N8N_HOST: 100.86.90.80
+      N8N_PROTOCOL: http
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/workflows
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "const http = require('http'); const req = http.get('http://127.0.0.1:5678/healthz/readiness', res => { res.resume(); process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', () => process.exit(1)); req.setTimeout(4000, () => { req.destroy(); process.exit(1); });"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  postgres_data:
+  redis_data:
+  n8n_data:

@@ -8,8 +8,14 @@ recovering an existing instance; the running production version is unverified.
 [![Stack](https://img.shields.io/badge/part%20of-Operator%20Stack-0f766e)](docs/ECOSYSTEM.md)
 [![Pairs with](https://img.shields.io/badge/control%20plane-S--OS-blue)](https://github.com/saifsoub/S-OS)
 [![Cockpit](https://img.shields.io/badge/cockpit-AgentEmpire-purple)](https://github.com/saifsoub/AgentEmpire)
+[![Live host](https://img.shields.io/badge/live-GCP%2034.139.100.169-green)](DEPLOY_TO_GCP.md)
 
-Local-first **automation runtime** for multi-business operations: Docker, Postgres, Redis, workflow JSON, and CI validation.
+**Canonical deployment: GCP VM** at 34.139.100.169 (Tailscale 100.86.90.80).
+n8n 2.42.3 in Docker, localhost:5678, Postgres + Redis. Full runbook:
+[DEPLOY_TO_GCP.md](DEPLOY_TO_GCP.md). Compose: [docker-compose.gcp.yml](docker-compose.gcp.yml).
+
+DigitalOcean App Platform specs are **parked** under
+[zz-ARCHIVE/digitalocean/](zz-ARCHIVE/digitalocean/) — not for deployment.
 
 Part of the **Operator Stack** — see [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md):
 
@@ -35,33 +41,17 @@ A practical local-first n8n operating repository for:
 
 ---
 
-## Quick Start
-
-### 1. Copy environment template
+## Quick Start (GCP box)
 
 ```bash
-cp .env.example .env
+ssh ubuntu@34.139.100.169
+cd /opt/n8n   # or wherever the repo is checked out on the box
+cp .env.example .env   # fill secrets
+openssl rand -base64 32  # set N8N_ENCRYPTION_KEY
+docker compose -f docker-compose.gcp.yml up -d
 ```
 
-### 2. Generate encryption key
-
-```bash
-openssl rand -base64 32
-```
-
-Replace `N8N_ENCRYPTION_KEY` inside `.env`.
-
-### 3. Start stack
-
-```bash
-docker compose -f docker-compose.local.yml up -d
-```
-
-### 4. Open n8n
-
-```txt
-http://localhost:5678
-```
+Open via Tailscale: `http://100.86.90.80:5678`
 
 ---
 
@@ -69,10 +59,11 @@ http://localhost:5678
 
 ### Infrastructure
 
-- n8n
+- n8n (GCP, canonical)
 - PostgreSQL
 - Redis
-- Docker local stack
+- Docker local stack (`docker-compose.local.yml`)
+- Docker GCP stack (`docker-compose.gcp.yml`)
 - GitHub validation CI
 
 ### Workflow Assets
@@ -111,6 +102,9 @@ scripts/                 runtime and validation helpers
 docs/                    operations and governance
 .env.example             environment template
 docker-compose.local.yml local runtime stack
+docker-compose.gcp.yml   canonical GCP runtime stack
+DEPLOY_TO_GCP.md         live deployment runbook
+zz-ARCHIVE/digitalocean/ parked DO App Platform specs
 ```
 
 ---
@@ -137,9 +131,10 @@ Capabilities:
 Recommended runtime order:
 
 1. Local Docker
-2. VPS or Coolify
-3. Railway / Render / Fly.io
-4. Kubernetes only when scale actually requires it
+2. GCP VM (current)
+3. VPS or Coolify
+4. Railway / Render / Fly.io
+5. Kubernetes only when scale actually requires it
 
 Avoid unnecessary recurring infrastructure costs during early operations.
 
@@ -171,6 +166,7 @@ Workflow file:
 - Human approval gates
 - Queue workers
 - External webhook registry
+- Point n8n at MariaDB (already running on the GCP box) instead of Postgres
 
 ---
 
@@ -183,4 +179,3 @@ This repository is designed for:
 - real workflow execution
 - persistent automation
 - zero-fluff infrastructure
-
