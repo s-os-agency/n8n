@@ -1,0 +1,62 @@
+name: Private n8n Fleet Order
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/private-n8n-order.yml
+permissions:
+  contents: read
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Join existing tailnet as a dedicated CI identity
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+      - name: Send bounded n8n orchestration order and retain receipt
+        env:
+          N8N_BASE_URL: http://100.86.90.80:5678
+          N8N_ORDER_WEBHOOK_PATH: ${{ secrets.N8N_ORDER_WEBHOOK_PATH }}
+          N8N_ORDER_TOKEN: ${{ secrets.N8N_ORDER_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p receipts
+          curl --fail --silent --show-error --connect-timeout 8 --max-time 20 "$N8N_BASE_URL/healthz/readiness" > receipts/readiness.json
+          test -n "$N8N_ORDER_WEBHOOK_PATH" || { echo "Configured order webhook is absent"; exit 1; }
+          case "$N8N_ORDER_WEBHOOK_PATH" in
+            /webhook/*) ;;
+            *) echo "Webhook path must be /webhook/*"; exit 1 ;;
+          esac
+          test -n "$N8N_ORDER_TOKEN" || { echo "Order token is absent"; exit 1; }
+          export ORDER_ID="github-${{ github.run_id }}-${{ github.run_attempt }}"
+          python3 - <<'PY'
+          import json,os
+          from datetime import datetime,timezone
+          with open("receipts/order-request.json","w") as f:
+              json.dump({"order":"fleet.pulse","source":"github-actions-tailscale","correlationId":os.environ["ORDER_ID"],"requestedAt":datetime.now(timezone.utc).isoformat()},f)
+          PY
+          code=$(curl --silent --show-error --connect-timeout 8 --max-time 45 -o receipts/order-response.json -w '%{http_code}' -X POST "$N8N_BASE_URL$N8N_ORDER_WEBHOOK_PATH" -H 'Content-Type: application/json' -H "Authorization: Bearer $N8N_ORDER_TOKEN" --data-binary @receipts/order-request.json)
+          echo "n8n order HTTP status: $code"
+          [ "$code" -ge 200 ] && [ "$code" -lt 300 ] || exit 1
+          python3 - <<'PY'
+          import json,os
+          payload=json.load(open("receipts/order-response.json"))
+          expected=os.environ["ORDER_ID"]
+          accepted=payload.get("correlationId")==expected and payload.get("status") in ("completed","success")
+          receipt=payload.get("executionId") or payload.get("receiptId")
+          if not (accepted and receipt):
+              raise SystemExit("HTTP success without matching completed execution receipt is not success")
+          print("Verified n8n execution receipt:",receipt)
+          PY
+      - name: Retain operation receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: private-n8n-order-${{ github.run_id }}
+          path: receipts/
+          retention-days: 30
