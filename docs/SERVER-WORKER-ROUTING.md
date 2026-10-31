@@ -32,3 +32,7 @@ The audit checks the local n8n readiness URL, factory timer state and actual run
 ## Evidence boundary
 
 Last historical verified Manus runtime (2026-10-30): n8n, university and gateway returned HTTP 200 in a timer health receipt, and MariaDB receipts were being recorded. This document links sources and adds a read-only checker. It does **not** certify a fresh server audit, all 77 repositories activated, or a newly deployed n8n workflow. Only a fresh host-side receipt can establish those outcomes.
+
+## Per-worker and Sites integration verification
+
+Run `node scripts/verify-fleet-integrations.mjs` from a trusted runtime with `N8N_BASE_URL` targeting the existing private n8n instance. A scoped `SITES_SERVICE_TOKEN`, if separately provisioned in the Sites platform, may be supplied through the runtime secret store. The script never prints that credential and checks all returned workers for a currently fresh heartbeat and validated passport; missing fields remain unverified. It also checks the three existing private management Sites and the n8n readiness endpoint. It is read-only and exits nonzero until every required assertion is independently verified. A 401 must not be handled by deleting owner restrictions or sharing an owner access code. Provision a separate restricted service identity through the supported Sites authentication configuration, retaining owner-only administration and audit logs. The GitHub code alone does not provision this identity or grant access.
