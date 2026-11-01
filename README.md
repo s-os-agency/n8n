@@ -72,7 +72,7 @@ Open via Tailscale: `http://100.86.90.80:5678`
 - Workflow import/export directory
 - Persistent workflow volume
 
-### Governance
+### Management
 
 - JSON validation in CI
 - Docker compose validation
@@ -128,7 +128,7 @@ Capabilities:
 
 ## Production Notes
 
-Recommended runtime order:
+Recommended system order:
 
 1. Local Docker
 2. GCP VM (current)
