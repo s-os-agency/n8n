@@ -1,0 +1,70 @@
+name: Zero-Token Heartbeat
+
+on:
+  schedule:
+    - cron: "17 2,8,14,20 * * *"
+  workflow_dispatch:
+    inputs:
+      force_marker:
+        description: "Force write a liveness marker"
+        required: false
+        default: "false"
+        type: boolean
+      dry_run:
+        description: "Report only"
+        required: false
+        default: "false"
+        type: boolean
+
+permissions:
+  contents: write
+  actions: write
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: zero-token-heartbeat
+  cancel-in-progress: false
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Cheap-first gate
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE_MARKER: ${{ inputs.force_marker || 'false' }}
+        run: |
+          set -euo pipefail
+          LAST_COMMIT_TS=$(git log -1 --format=%ct)
+          NOW_TS=$(date +%s)
+          DAYS_SINCE=$(( (NOW_TS - LAST_COMMIT_TS) / 86400 ))
+          NEED_MARKER="false"
+          if [[ "$DAYS_SINCE" -ge 50 || "$FORCE_MARKER" == "true" ]]; then NEED_MARKER="true"; fi
+          echo "need_marker=$NEED_MARKER" >> $GITHUB_OUTPUT
+          echo "days_since=$DAYS_SINCE" >> $GITHUB_OUTPUT
+          SIGNAL=""
+          FAILED=$(gh run list --status failure --limit 5 --json createdAt --jq '[.[] | select(.createdAt > (now - 86400 | todate))] | length' 2>/dev/null || echo "0")
+          if [[ "$FAILED" -gt 0 ]]; then SIGNAL="failed_runs=${FAILED};"; fi
+          echo "signal=$SIGNAL" >> $GITHUB_OUTPUT
+      - name: Write marker if needed
+        if: steps.gate.outputs.need_marker == 'true' && (inputs.dry_run != 'true')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MARKER=".github/.zero-token-liveness"
+          mkdir -p .github
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > "$MARKER"
+          git config user.name "zero-token-heartbeat[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$MARKER"
+          git commit -m "chore(heartbeat): keep n8n fleet alive (zero-token)" || true
+          git push origin HEAD:${{ github.ref_name }}
+      - name: Report
+        run: |
+          echo "### Zero-Token Heartbeat | days=${{ steps.gate.outputs.days_since }} | signal=${{ steps.gate.outputs.signal || 'none' }} | tokens=0" >> $GITHUB_STEP_SUMMARY
