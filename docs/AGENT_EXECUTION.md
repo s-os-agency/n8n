@@ -1,65 +1,44 @@
-# n8n — Work instructions and current evidence
+# n8n — Finish the work
 
-**Portfolio:** 4/16 (source row 4); **Proposed lead (not dispatched):** Gemini; **specialty:** GCP/n8n operations and provider integrations; **Proposed reviewer (not dispatched):** ChatGPT (Workflow contracts and risk review).
-**Repository:** https://github.com/s-os-agency/n8n
-**Existing work-item records:** https://docs.google.com/spreadsheets/d/1MMk4Tx0k5rS7e_vOIFg-Dg022VEqXsdwqHibT9-3uOI/edit#gid=20261034
-**Existing release record:** https://docs.google.com/spreadsheets/d/1MMk4Tx0k5rS7e_vOIFg-Dg022VEqXsdwqHibT9-3uOI/edit#gid=20261035
-**Suggested work:** Check the actual server and workflows; **Proposed human role (not staffed):** Workflow Automation Engineer.
+Use the existing n8n server and the owner's current instructions in [AGENTS.md](../AGENTS.md). Complete authorized work without waiting for a form, a named stage, a proposed reviewer or a staffing assignment. If one action cannot proceed, state the specific missing access or fact and continue the work that can.
 
-## Execution rule — 2 November 2026
+## Existing records
 
-Carry the authorized task through to its requested result. Fill in records while working; a form, named stage, unavailable reviewer or proposed staffing role is not a reason to stop. A check is required only when omitting it would cause a specific failure, break an existing access restriction or exceed the owner's authorization. State that concrete reason.
+- Repository: https://github.com/s-os-agency/n8n
+- Work items: https://docs.google.com/spreadsheets/d/1MMk4Tx0k5rS7e_vOIFg-Dg022VEqXsdwqHibT9-3uOI/edit#gid=20261034
+- Release results: https://docs.google.com/spreadsheets/d/1MMk4Tx0k5rS7e_vOIFg-Dg022VEqXsdwqHibT9-3uOI/edit#gid=20261035
+- Server connection instructions: [AGENT-ACCESS.md](AGENT-ACCESS.md)
 
-Use existing authorized access. Do not broaden permissions, disclose credentials or infer approval from silence. If a necessary fact is missing, retrieve it from available sources first. If one action still needs owner input, identify the exact action and continue independent authorized work.
+The earlier portfolio assignment named Gemini as a proposed lead and ChatGPT as a proposed reviewer. Those labels do not establish access or a running session. Use the agent that has the required authorized tools. An unavailable reviewer must not stop implementation.
 
-Inspect source and saved changes for documentation work. For a live release, also inspect the provider's deployment result and the running service. Keep source changes, deployment and observed operation as separate facts. Do not add or run software test suites. Record the actual improvement, its evidence and the executing agent. Administrative records may follow execution; they do not create another approval queue.
+## Working rules
 
-## Rules for actual work
-- Existing root AGENTS.md owner instruction controls: do not add, restore or run software test suites, test-only workflows or scaffolding. Existing spreadsheet references to tests are superseded: obtain real source/build/configuration and operational readback evidence within the owner policy. Never claim tests were run or passed.
-- Inspect canonical README, source, existing diffs and deployments before changes. Make the smallest reversible implementation change required. Do not merely write plans or invent launch statuses.
-- The named lead is a proposed execution assignment, **not proof of an active external agent session**, OpenRouter invocation, or authority to use another agent's account. A reviewer is an independent second-pass assignment, not an approval already provided.
-- Use only scoped provider access actually available. No blind deployment, destructive migrations, new permissions, purchases or exposure of credentials. Preserve backups and rollback.
-- Attach evidence URL, UTC date, version/commit, deployed environment and observed result to the corresponding work-item record. Mark VERIFIED only for evidence-backed completion. Leave other gates OPEN; no fabricated real customer, revenue, PayPal or Ziina status.
-- Production launch requires a provider-backed deployment receipt and actual live runtime observation, not a green document or UI screenshot.
+- Read the current source, changes and service configuration before editing. Preserve work already completed by another agent.
+- Use existing authorized access. Do not expand permissions, reveal credentials or treat silence as approval.
+- Make the smallest reversible change that completes the requested task. Preserve the existing service, data and recovery copy.
+- Do not create, restore or run software tests, test commands, test workflows or test-only files. Older spreadsheet requests for them are superseded by the owner's 25 October instruction.
+- Inspect the saved change. For a deployment, also inspect the provider's result and the running service. Record each as a separate fact.
+- Record the specific result, source revision, time, evidence location and executing agent. Do not report an assignment, plan, screenshot or successful command as a completed user outcome.
+- Finish the work before updating its records when recording would otherwise cause a delay. A record is not another approval step.
 
-## Work that still needs evidence
+## Remaining work
 
-### Work item 4.1 — INVENTORY
-**Action:** Check documented GCP host, current production container version, images, databases, queue and backup before changes.
-**Acceptance outcome:** Read-only host status, version, db persistence, configuration and backups captured with timestamps.
-**Proof needed:** Real source or commit, environment, time and observed result; add independent review only if it actually happened. Record verified results in the existing sheet. **Recorded state: OPEN; not rechecked here.**
+Keep the existing item numbers so earlier records remain usable. These are work descriptions, not additional approval stages. This documentation edit does not mark any server operation complete.
 
-### Work item 4.2 — SOURCE
-**Action:** Pin version and validate Compose services, migrations, environment requirements and workflow imports.
-**Expected result:** Review actual Compose configuration and imports, and capture permitted operational evidence without upgrading production or running software tests.
-**Proof needed:** Real source or commit, environment, time and observed result; add independent review only if it actually happened. Record verified results in the existing sheet. **Recorded state: OPEN; not rechecked here.**
+| Item | Do this | Record the actual result |
+| --- | --- | --- |
+| 4.1 — Server | Inspect the existing host, running image, database, queue and backup before changing them. | Current versions, service responses, storage and backup observations, with timestamps. |
+| 4.2 — Configuration | Align the version pin and inspect the existing Compose settings, required variables and workflow imports. | Saved configuration and actual import results. Do not upgrade the running service merely to complete this item. |
+| 4.3 — Access | Check private webhook authentication, stored credentials, network restrictions and account permissions. | Which allowed requests work and which anonymous requests are denied. Keep secrets out of source and results. |
+| 4.4 — Connection | Import or repair the existing authorized S-OS command workflow. Keep its request identifier so a repeated request does not create duplicate work. | One real request, its returned result and its saved record. |
+| 4.5 — Deployment | Preserve the existing deployment. Change its version only within the owner's authorization and with a usable recovery copy. | The actual deployment result, running version and preserved database. Inspect the database in use; do not assume Postgres or Redis is installed. |
+| 4.6 — Workflow | Run the requested safe workflow and inspect its saved execution. Inspect existing retry behavior when relevant; do not restart services or inject failures just to create evidence. | Execution ID, time, returned output and saved result. State any unverified recovery behavior separately. |
+| 4.7 — Customer delivery | Apply only when the request includes a customer-facing service. It is not a prerequisite for internal n8n work. | A customer acceptance record or settled invoice only when one actually exists. Do not infer revenue from an inquiry or checkout. |
 
-### Work item 4.3 — SECURITY
-**Action:** Confirm webhook authentication, managed credentials, network/firewall controls and least-privilege accounts.
-**Acceptance outcome:** Anonymous access denied to private webhooks, no secrets in logs/source.
-**Proof needed:** Real source or commit, environment, time and observed result; add independent review only if it actually happened. Record verified results in the existing sheet. **Recorded state: OPEN; not rechecked here.**
+## Completion
 
-### Work item 4.4 — INTEGRATE
-**Action:** Import one approved S-OS command gateway workflow and register idempotent event correlation.
-**Acceptance outcome:** Dry-run command flows through webhook and returns exactly one persistent receipt.
-**Proof needed:** Real source or commit, environment, time and observed result; add independent review only if it actually happened. Record verified results in the existing sheet. **Recorded state: OPEN; not rechecked here.**
+Close each requested item when its actual result is verified. Keep incomplete parts open with a specific next action and resume condition. Ask the owner only for authorization that is genuinely missing for the next action; continue independent authorized work.
 
-### Work item 4.5 — DEPLOY
-**Action:** Start/preserve existing canonical GCP deployment, only change version with restore point and authorized cutover.
-**Expected result:** Confirm actual server health, stored Postgres/Redis data and an available rollback procedure without running software tests.
-**Proof needed:** Real source or commit, environment, time and observed result; add independent review only if it actually happened. Record verified results in the existing sheet. **Recorded state: OPEN; not rechecked here.**
+Do not turn a proposed role, missing administrative field or unrelated customer/payment item into a reason to stop.
 
-### Work item 4.6 — LIVE PROOF
-**Action:** Trigger safe live workflow, verify execution history survives refresh/restart and failure retry.
-**Acceptance outcome:** Timestamped execution ID, output, durable receipt, and controlled retry evidence recorded.
-**Proof needed:** Real source or commit, environment, time and observed result; add independent review only if it actually happened. Record verified results in the existing sheet. **Recorded state: OPEN; not rechecked here.**
-
-### Work item 4.7 — COMMERCIAL
-**Action:** Only customer-facing service packages require buyer/order evidence; n8n itself is internal delivery runtime.
-**Acceptance outcome:** No direct n8n customer or payment claim without customer-level delivery acceptance or settled invoice.
-**Proof needed:** Real source or commit, environment, time and observed result; add independent review only if it actually happened. Record verified results in the existing sheet. **Recorded state: OPEN; not rechecked here.**
-
-## How to report completed work
-Record completed work and evidence in the existing sheet when available. An unavailable sheet must not stop authorized implementation. Distinguish implementation from launch, customer acceptance from inquiries and settled payments from checkout creation. The lead produces the change receipt; the reviewer checks evidence independently. Report the requested outcome as complete only when its applicable acceptance criteria have direct evidence. Do not make unrelated commercial items or a proposed reviewer prerequisites for internal work. Report any unavoidable external authorization boundary specifically.
-
-**Original document author:** GPT-6. This text does not prove a launch, an agent assignment or any running service.
+Plain-English rewrite implemented by Codex on 2 November 2026. Original document author: GPT-6. This edit changes instructions only; it does not claim a deployment or workflow execution.
