@@ -14,9 +14,6 @@ recovering an existing instance; the running production version is unverified.
 n8n 2.42.3 in Docker, localhost:5678, Postgres + Redis. Full runbook:
 [DEPLOY_TO_GCP.md](DEPLOY_TO_GCP.md). Compose: [docker-compose.gcp.yml](docker-compose.gcp.yml).
 
-DigitalOcean App Platform specs are **parked** under
-[zz-ARCHIVE/digitalocean/](zz-ARCHIVE/digitalocean/) — not for deployment.
-
 Part of the **Operator Stack** — see [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md):
 
 | Repo | Role |
@@ -104,7 +101,6 @@ docs/                    operations and governance
 docker-compose.local.yml local runtime stack
 docker-compose.gcp.yml   canonical GCP runtime stack
 DEPLOY_TO_GCP.md         live deployment runbook
-zz-ARCHIVE/digitalocean/ parked DO App Platform specs
 ```
 
 ---
