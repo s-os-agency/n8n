@@ -1,22 +1,26 @@
-# Agent Access Contract — n8n on GCP
+# Access to the private n8n server
 
-Single source of truth for any agent, worker, or runtime that needs to reach the live n8n instance. Do not hardcode URLs elsewhere; read from here or from the `N8N_BASE_URL` env var it defines.
+This file explains how authorized agents connect to the existing n8n server. It does not give anyone access or prove that a connection works.
 
-## Live instance
+Use `N8N_BASE_URL` for the server address in code. Do not copy the IP address into other source files.
 
-| Key | Value |
-|-----|-------|
-| Host (Tailscale) | `100.86.90.80` |
-| Public IP | `34.139.100.169` (SSH only — n8n is **not** exposed publicly) |
+## Server details
+
+| Setting | Value |
+|---|---|
+| Private Tailscale address | `100.86.90.80` |
+| Public IP | `34.139.100.169` (SSH only; n8n is not public) |
 | Port | `5678` |
-| Bind | `127.0.0.1` only |
-| Protocol | `http` (Tailscale mesh is already encrypted) |
+| Bind address | `127.0.0.1` only |
+| Connection | `http` over encrypted Tailscale |
 | Timezone | `Asia/Dubai` |
-| Container image | `n8nio/n8n:2.42.3` |
-| Compose file | `docker-compose.gcp.yml` (this repo, root) |
-| Deploy command | `docker compose -f docker-compose.gcp.yml up -d` |
+| Last documented container image | `n8nio/n8n:2.42.3` |
+| Compose file | `docker-compose.gcp.yml` |
+| Start command | `docker compose -f docker-compose.gcp.yml up -d` |
 
-## Env contract (for connectors)
+These are documented settings, not a fresh check of the running server.
+
+## Settings for connected services
 
 ```bash
 N8N_BASE_URL=http://100.86.90.80:5678
@@ -25,81 +29,85 @@ N8N_PROTOCOL=http
 N8N_PORT=5678
 ```
 
-`doneai-daros` already reads `N8N_BASE_URL` via `src/connectors/n8n.connector.js` and pings `/healthz`. New agents should do the same — never embed the IP in code.
+`doneai-daros` reads `N8N_BASE_URL` in `src/connectors/n8n.connector.js`. Other integrations should read the same setting rather than store the address in code.
 
-## Health endpoints
+## Check whether the server responds
 
-- Readiness: `GET http://100.86.90.80:5678/healthz/readiness` → expect `200`
-- Liveness: `GET http://100.86.90.80:5678/healthz` → expect `200`
-- Repo script: `scripts/healthcheck.sh` wraps the same check
+- `GET /healthz/readiness`: a responding server should return HTTP 200 when ready.
+- `GET /healthz`: a responding server should return HTTP 200.
+- `scripts/healthcheck.sh` provides the existing health check.
 
-## Workflow surfaces (import from `workflows/`)
+These are connection checks, not evidence that any agent has editing permission. No check was run as part of this documentation edit.
 
-| File | Role | Trigger |
-|------|------|--------|
-| `s-orchestrator-hourly.json` | Hourly dispatcher — Route-to-Worker node, HOURLY-ACCEPTANCE protocol (workers must return receipts) | Schedule (hourly) |
-| `telegram-approval.json` | Human approval gate over Telegram | Webhook |
-| `gmail-approval-template.json` | Gmail-based approval | Template |
-| `monday-sync-template.json` | Monday.com sync | Template |
-| `ai-router-template.json` | AI routing | Template |
-| `n8n-apex-router.workflow.json` | Apex router (lives in `clawi-telegram-runtime`, imports here) | Manual |
+## Existing workflow files
 
-Import with: `bash scripts/import-workflows.sh` (or paste JSON in the n8n UI under Workflows → Import).
-
-## Who depends on this
-
-- **doneai-daros** — `n8n.connector.js` health ping + webhook trigger
-- **S-OS** — kernel workflows imported into this engine; gateway commands route here
-- **AgentEmpire** — operator cockpit consumes n8n for automation actions
-- **s-cloudflare-workers** — fleet workers (control-room-feed, migration-auditor, second-brain-keeper, watchdog) coordinate via n8n surfaces
-- **OUTS-83** (Assistant Hub hourly engine) — owner of the n8n Scheduler Worker (S-PASS-20260911-005)
-- **OUTS-93** (Binance runtime activation) — pending; will use n8n as orchestration layer once live
-
-## Universal agent collaboration and editor onboarding
-
-**Owner authorization (2026-10-24):** The owner invites native-platform agents and S/Agency agents to collaborate via n8n and requests workflow edit capability for each authenticated, compatible agent. Participation is voluntary. This policy is an invitation and authorization to provision scoped access; **it is not evidence that an account, credential, connector, or live permission has been created**.
-
-### Initial invited roster
-
-| Agent or group | Intended role | Verified n8n editor access |
+| File | Purpose | How it starts |
 |---|---|---|
-| ChatGPT / GPT assistant | Agent collaborator, workflow author/editor | Not verified |
-| Gemini | Agent collaborator, workflow author/editor | Not verified |
-| Claude / Claude Code | Agent collaborator, workflow author/editor | Not verified |
-| Grok | Agent collaborator, workflow author/editor | Not verified |
-| Codex | Agent collaborator, workflow author/editor | Not verified |
-| Manus | Agent collaborator, workflow author/editor | Not verified |
-| Kimi | Agent collaborator, workflow author/editor | Not verified |
-| Sovereign | S/Agency orchestrator | Not verified |
-| S/Agency specialist agents (as individually identified in the current roster) | Scoped workflow authors/editors | Not verified |
+| `s-orchestrator-hourly.json` | Assigns hourly work and asks workers to report results; existing names include `Route-to-Worker` and `HOURLY-ACCEPTANCE` | Hourly schedule |
+| `telegram-approval.json` | Requests a person's approval through Telegram | Webhook |
+| `gmail-approval-template.json` | Example Gmail approval workflow | Template |
+| `monday-sync-template.json` | Example Monday.com sync | Template |
+| `ai-router-template.json` | Example AI work routing | Template |
+| `n8n-apex-router.workflow.json` | Existing router from `clawi-telegram-runtime` | Manual |
 
-The list is extensible, not exhaustive. Keep each agent's native platform identity distinct; do not assume a model name alone identifies a callable, persistent agent.
+To import a workflow, use `bash scripts/import-workflows.sh` or n8n's Workflows → Import option. A file in this repository does not prove its workflow is imported or running.
 
-### Portable access contract
+## Projects that use or intend to use n8n
 
-Any invited agent can opt in using a compatible tool/plugin/MCP/HTTP connector. The agent should be able to discover its capabilities without platform-specific prompt assumptions:
+- **doneai-daros:** Connector for checking n8n and triggering webhooks.
+- **S-OS:** Intended place for core workflows and commands.
+- **AgentEmpire:** Uses or plans n8n automation actions.
+- **s-cloudflare-workers:** Workers intended to coordinate through n8n.
+- **OUTS-83:** Existing reference for Assistant Hub's hourly scheduling worker (`S-PASS-20260911-005`).
+- **OUTS-93:** Binance activation work is pending; do not call it connected or live without evidence.
 
-- `GET /capabilities` (future broker contract): return supported operations, connector/auth method, granted scopes, approval requirements, and audit behavior; **not currently deployed**.
-- Minimum operations to implement through the authenticated broker: `health`, `list_workflows`, `get_workflow`, `create_workflow`, `update_workflow`, `validate_workflow`, `execute_workflow`, `get_execution`, `get_agent_status`.
-- Never claim an operation is available until it has passed an actual connector call. If unsupported, report `unsupported` with reason; if not configured, `unconfigured`; if forbidden, `permission_denied`.
-- The user authorizes onboarding and edit capability in principle. Actual n8n editor rights must be provisioned using an authenticated project role or scoped server-side broker, not by this documentation. Keep credentials out of GitHub, browser code, and prompts.
-- Production changes require existing approval/audit gates; allow test workflow edits and validation within granted scope. Keep rollback and immutable execution receipts.
-- Registry status must be derived from verified events: `invited` → `authenticated` → `read_verified` → `edit_verified`; track last heartbeat, granted scopes, and receipts. Never infer success from an invitation.
-- New agents discovered through user interactions may be proposed for registry inclusion, but cannot silently receive credentials or permissions; onboarding needs verified identity and a supported authorization path.
+Descriptions of intended use are not proof of a live connection.
 
-**Integration target:** reuse the existing GCP n8n engine and its private Tailscale route. The portable broker/capability discovery and automatic roster sync are **requirements, not completed features**. Do not expose n8n publicly or bypass approvals to make a platform appear compatible.
+## Who may request editing access
 
-## Rules
+**Owner instruction, 24 October 2026:** Seif invites compatible platform agents and S/Agency agents to work together through n8n. He authorizes arranging properly limited workflow editing access for agents that authenticate successfully. This invitation does **not** create an account, password, connection or permission.
 
-1. **One URL, one source.** `N8N_BASE_URL` or this file. Nothing else.
-2. **No public exposure.** Port 5678 stays on localhost; agents reach it over Tailscale. If you need external access, use Tailscale Funnel deliberately — never open the firewall.
-3. **Version pin matters.** `.n8n-version` is canonical. Running box is 2.42.3; repo pin still says 2.3.2 — reconcile before any upgrade (`python3 scripts/validate-versions.py`).
-4. **Secrets stay in `.env`** on the box, never in this repo. `.env.example` shows the shape.
-5. **DigitalOcean configs are archived** under `zz-ARCHIVE/digitalocean/` — do not deploy from them.
+| Invited agent or group | Intended work | Verified n8n editor access |
+|---|---|---|
+| ChatGPT / GPT assistant | Workflows | Not verified |
+| Gemini | Workflows | Not verified |
+| Claude / Claude Code | Workflows | Not verified |
+| Grok | Workflows | Not verified |
+| Codex | Workflows | Not verified |
+| Manus | Workflows | Not verified |
+| Kimi | Workflows | Not verified |
+| Sovereign | Coordinate S/Agency work | Not verified |
+| Individually identified S/Agency agents | Workflows within their approved access | Not verified |
 
-## Quick verify from any agent shell
+Other agents may be invited later. Each agent must have an identifiable, authenticated account or supported connection. A model's name alone is not proof of identity or access.
+
+## How agent access should work
+
+1. Confirm the agent's identity and supported connection method. It may use an authorized plugin, MCP connection or HTTP service.
+2. Give it only the permissions it needs through an authenticated n8n project role or a properly secured server-side service. **This document grants no permissions.**
+3. Confirm what the actual connection can do before claiming it can read, create, edit or run a workflow.
+4. Keep credentials out of GitHub, browser code and prompts. Keep existing production approval requirements and records of changes. Do not bypass owner authorization.
+5. If an operation is unavailable, say why: `unsupported`, `unconfigured` or `permission_denied`. Do not report an invitation as a successful connection.
+6. Record only real steps completed, such as an authenticated connection, a confirmed read or a confirmed edit. Do not assume the next step happened.
+7. A newly discovered agent must not receive credentials or editing rights automatically.
+
+**Not implemented or verified here:** A future `GET /capabilities` endpoint that would show available operations, authentication, allowed actions, approval rules and records. The proposed server-side connection would support `health`, `list_workflows`, `get_workflow`, `create_workflow`, `update_workflow`, `validate_workflow`, `execute_workflow`, `get_execution` and `get_agent_status`. These are proposed interface names, **not proof that the functions exist**. Automatic agent-list updates are also not verified.
+
+Use the existing private GCP n8n server and Tailscale connection. Do not create a second server, expose this one publicly or weaken approval rules to make a connection seem ready.
+
+## Rules that must remain in force
+
+1. Use `N8N_BASE_URL` or this file for the address.
+2. Keep port `5678` private. Access is through Tailscale; do not open the public firewall. Tailscale Funnel would need a deliberate, separately authorized decision.
+3. Check the version before upgrading. The last documented running image is `2.42.3`, but `.n8n-version` says `2.3.2`. Resolve that difference before any upgrade. The existing command is `python3 scripts/validate-versions.py`; do not treat a documented command as something run.
+4. Keep secrets in the server's `.env`, never in this repository. `.env.example` lists expected setting names.
+5. Do not deploy archived DigitalOcean files under `zz-ARCHIVE/digitalocean/`.
+6. Follow the owner's 25 October 2026 ban: do not add, restore or run software tests, test suites, test workflows or test-only tooling. Inspect source, saved changes and existing operational evidence instead. Do not claim tests passed.
+
+## Optional manual connection check
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}" http://100.86.90.80:5678/healthz/readiness
-# expect: 200
 ```
+
+Expected response, when connected and ready: `200`. This command is an example, not a record that it was executed.
