@@ -10,7 +10,7 @@ spec:
         registry_type: GHCR
         registry: ghcr.io
         repository: n8n-io/n8n
-        tag: "2.3.2"  # Must match .n8n-version (validated in CI)
+        tag: "2.42.3"  # Must match .n8n-version (validated in CI)
       http_port: 5678
       instance_count: 1
       instance_size_slug: apps-s-1vcpu-1gb

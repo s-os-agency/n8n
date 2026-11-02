@@ -46,7 +46,7 @@ docker stop n8n && docker rm n8n
 
 ## Version policy
 
-Image tags are pinned in [.n8n-version](.n8n-version) and validated by CI (scripts/validate-versions.py). The running container on GCP is 2.42.3; the repo's compose files still reference 2.3.2 — that drift is tracked and should be reconciled.
+Image tags are pinned in [.n8n-version](.n8n-version) and validated by CI (scripts/validate-versions.py). The repository baseline is 2.42.3. Inspect the actual running version before applying any deployment.
 
 ## Env
 
@@ -62,7 +62,7 @@ Because n8n is bound to localhost, external webhook callers need either Tailscal
 
 ## Next steps
 
-1. Reconcile image tag 2.3.2 → 2.42.3 across compose files and `.n8n-version`
+1. Confirm the running image matches the 2.42.3 repository baseline before changing it
 2. Decide on persistent storage beyond the Docker volume (MariaDB is already on this box — could point n8n at it instead of Postgres)
 3. Expose via Tailscale Funnel or a reverse proxy if webhooks need to be public
 4. Back up the `n8n_data` volume

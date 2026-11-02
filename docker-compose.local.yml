@@ -28,7 +28,7 @@ services:
 
   n8n:
     # Kept in sync with .n8n-version by CI; environment cannot override this tag.
-    image: n8nio/n8n:2.3.2
+    image: n8nio/n8n:2.42.3
     restart: unless-stopped
     ports:
       - "${N8N_BIND_ADDRESS:-127.0.0.1}:${N8N_PORT:-5678}:5678"

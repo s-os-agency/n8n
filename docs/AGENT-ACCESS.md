@@ -99,7 +99,7 @@ Use the existing private GCP n8n server and Tailscale connection. Do not create 
 
 1. Use `N8N_BASE_URL` or this file for the address.
 2. Keep port `5678` private. Access is through Tailscale; do not open the public firewall. Tailscale Funnel would need a deliberate, separately authorized decision.
-3. Check the version before upgrading. The last documented running image is `2.42.3`, but `.n8n-version` says `2.3.2`. Resolve that difference before any upgrade. The existing command is `python3 scripts/validate-versions.py`; do not treat a documented command as something run.
+3. Check the version before upgrading. The repository pin and last documented running image are `2.42.3`. Inspect the actual runtime before any upgrade. The existing command is `python3 scripts/validate-versions.py`; do not treat a documented command as something run.
 4. Keep secrets in the server's `.env`, never in this repository. `.env.example` lists expected setting names.
 5. Do not deploy archived DigitalOcean files under `zz-ARCHIVE/digitalocean/`.
 6. Follow the owner's 25 October 2026 ban: do not add, restore or run software tests, test suites, test workflows or test-only tooling. Inspect source, saved changes and existing operational evidence instead. Do not claim tests passed.

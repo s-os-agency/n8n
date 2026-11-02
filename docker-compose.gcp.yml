@@ -6,7 +6,7 @@
 #
 # Notes:
 # - Image tag must match .n8n-version (currently 2.42.3 on the running box;
-#   repo pin is 2.3.2 — reconcile before next upgrade).
+#   repo pin is 2.42.3 — inspect runtime before any upgrade).
 # - Bound to 127.0.0.1 only. Reach via Tailscale 100.86.90.80:5678.
 # - Postgres/Redis expected from host .env; swap for MariaDB later if desired.
 

@@ -1,6 +1,6 @@
 # n8n versions and upgrades
 
-## Documented versions
+The repository release pin in [.n8n-version](.n8n-version) is **2.42.3**. Local Compose, the environment example and App Platform templates use that same pin. Inspect the actual running version and preserve a restore point before any deployment; never start an older version against a newer database.
 
 The repository pin in [.n8n-version](.n8n-version) is **2.3.2**. [docs/AGENT-ACCESS.md](docs/AGENT-ACCESS.md) records a later running image, **2.42.3**. Neither statement is a fresh observation of the server. Check the running version before changing it; do not deploy the older pin over a newer database.
 

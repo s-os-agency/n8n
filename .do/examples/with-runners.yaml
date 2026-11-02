@@ -16,7 +16,7 @@ services:
       registry_type: GHCR
       registry: ghcr.io
       repository: n8n-io/n8n
-      tag: "2.3.2"
+      tag: "2.42.3"
     http_port: 5678
     internal_ports:
       - 5679  # Task Runner broker port
@@ -130,7 +130,7 @@ workers:
       registry_type: GHCR
       registry: ghcr.io
       repository: n8n-io/runners
-      tag: "2.3.2"
+      tag: "2.42.3"
     instance_count: 1  # Scale based on Code node usage
     instance_size_slug: apps-s-1vcpu-1gb
 
