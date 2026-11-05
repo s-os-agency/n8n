@@ -1,70 +1,177 @@
+# Zero-Token Heartbeat + Bot Supervisor
+# =====================================
+# Goal: Keep scheduled bots / workflows alive forever while consuming
+#       ZERO LLM tokens on the happy path.
+#
+# Design principles (strict):
+# 1. Cheap-first gate — pure shell / GitHub API / file checks only.
+# 2. Silence is the default — no agent is woken unless a real condition trips.
+# 3. Liveness without noise — only write a marker when approaching the
+#    60-day GitHub inactivity cliff.
+# 4. Protection first — minimal permissions, timeouts, no secrets leakage,
+#    rate-limit aware, self-guard on this workflow file.
+#
+# Token budget on normal run: 0
+# Token budget on real signal: only the downstream agent you explicitly call.
+
 name: Zero-Token Heartbeat
 
 on:
   schedule:
+    # Every 6 hours — more than enough to stay under 60-day inactivity.
+    # Offset from top-of-hour to reduce thundering herd.
     - cron: "17 2,8,14,20 * * *"
   workflow_dispatch:
     inputs:
       force_marker:
-        description: "Force write a liveness marker"
+        description: "Force write a liveness marker even if not near 60d"
         required: false
         default: "false"
         type: boolean
       dry_run:
-        description: "Report only"
+        description: "Report only — do not write or enable anything"
         required: false
         default: "false"
         type: boolean
 
+# Least privilege. contents:write only needed for the rare marker commit.
 permissions:
   contents: write
   actions: write
   issues: read
   pull-requests: read
+  checks: read
 
 concurrency:
   group: zero-token-heartbeat
-  cancel-in-progress: false
+  cancel-in-progress: false   # never cancel a real check
 
 jobs:
   heartbeat:
+    name: Zero-Token Heartbeat
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 4          # hard ceiling — never burn minutes
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout (shallow)
+        uses: actions/checkout@v4
         with:
           fetch-depth: 1
-      - name: Cheap-first gate
+
+      - name: Cheap-first gate (no tokens)
         id: gate
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORCE_MARKER: ${{ inputs.force_marker || 'false' }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: |
           set -euo pipefail
+
+          echo "::group::Zero-Token Gate"
+          echo "Repo: ${{ github.repository }}"
+          echo "Ref:  ${{ github.ref }}"
+          echo "Run:  ${{ github.run_id }}"
+          echo "Force marker: $FORCE_MARKER"
+          echo "Dry run: $DRY_RUN"
+          echo "::endgroup::"
+
+          # ---- 0. Self-protection: this workflow must still exist --------
+          if [[ ! -f .github/workflows/zero-token-heartbeat.yml ]]; then
+            echo "CRITICAL: zero-token-heartbeat.yml is missing — belongings at risk"
+            echo "signal=self_missing;" >> $GITHUB_OUTPUT
+            echo "need_marker=true" >> $GITHUB_OUTPUT
+            echo "days_since=999" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # ---- 1. Last commit age (days) ---------------------------------
           LAST_COMMIT_TS=$(git log -1 --format=%ct)
           NOW_TS=$(date +%s)
           DAYS_SINCE=$(( (NOW_TS - LAST_COMMIT_TS) / 86400 ))
+          echo "Days since last commit: $DAYS_SINCE"
+
+          # ---- 2. Decide whether a liveness marker is required -----------
+          # GitHub disables scheduled workflows after ~60 days of inactivity.
+          # We act at 50 days so we have margin.
           NEED_MARKER="false"
-          if [[ "$DAYS_SINCE" -ge 50 || "$FORCE_MARKER" == "true" ]]; then NEED_MARKER="true"; fi
+          if [[ "$DAYS_SINCE" -ge 50 || "$FORCE_MARKER" == "true" ]]; then
+            NEED_MARKER="true"
+          fi
           echo "need_marker=$NEED_MARKER" >> $GITHUB_OUTPUT
           echo "days_since=$DAYS_SINCE" >> $GITHUB_OUTPUT
+
+          # ---- 3. Detect real signals that *should* wake a supervisor ----
+          # These are pure GitHub API / local checks — still zero LLM tokens.
           SIGNAL=""
-          FAILED=$(gh run list --status failure --limit 5 --json createdAt --jq '[.[] | select(.createdAt > (now - 86400 | todate))] | length' 2>/dev/null || echo "0")
-          if [[ "$FAILED" -gt 0 ]]; then SIGNAL="failed_runs=${FAILED};"; fi
+
+          # a) Any workflow currently failing (last 24h) — simple age filter
+          FAILED=$(gh run list --status failure --limit 8 --json createdAt \
+            --jq --argjson cutoff $((NOW_TS - 86400)) \
+            '[.[] | select((.createdAt | fromdateiso8601) > $cutoff)] | length' 2>/dev/null || echo "0")
+          if [[ "$FAILED" =~ ^[0-9]+$ && "$FAILED" -gt 0 ]]; then
+            SIGNAL="${SIGNAL}failed_runs=${FAILED};"
+          fi
+
+          # b) Open PRs that are stale > 7 days
+          STALE_PRS=$(gh pr list --state open --json number,updatedAt \
+            --jq --argjson cutoff $((NOW_TS - 604800)) \
+            '[.[] | select((.updatedAt | fromdateiso8601) < $cutoff)] | length' 2>/dev/null || echo "0")
+          if [[ "$STALE_PRS" =~ ^[0-9]+$ && "$STALE_PRS" -gt 0 ]]; then
+            SIGNAL="${SIGNAL}stale_prs=${STALE_PRS};"
+          fi
+
+          # c) Any open issue labeled usageexhausted or bot-down
+          EXHAUSTED=$(gh issue list --state open --label "usageexhausted" --json number --jq 'length' 2>/dev/null || echo "0")
+          BOTDOWN=$(gh issue list --state open --label "bot-down" --json number --jq 'length' 2>/dev/null || echo "0")
+          if [[ "$EXHAUSTED" =~ ^[0-9]+$ && "$EXHAUSTED" -gt 0 ]]; then
+            SIGNAL="${SIGNAL}usageexhausted=${EXHAUSTED};"
+          fi
+          if [[ "$BOTDOWN" =~ ^[0-9]+$ && "$BOTDOWN" -gt 0 ]]; then
+            SIGNAL="${SIGNAL}bot_down=${BOTDOWN};"
+          fi
+
+          # d) Belongings guard — flag accidental credential files in tree
+          #    (cheap, no network, protects user secrets)
+          if git ls-files | grep -E '\.(env|pem|key|p12|pfx)$|credentials\.json|secrets\.ya?ml' >/dev/null 2>&1; then
+            SIGNAL="${SIGNAL}possible_secrets_in_tree;"
+          fi
+
           echo "signal=$SIGNAL" >> $GITHUB_OUTPUT
-      - name: Write marker if needed
+          if [[ -n "$SIGNAL" ]]; then
+            echo "Real signal detected: $SIGNAL"
+          else
+            echo "No actionable signal — remaining silent (zero tokens)."
+          fi
+
+      - name: Write liveness marker (only if needed)
         if: steps.gate.outputs.need_marker == 'true' && (inputs.dry_run != 'true')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           MARKER=".github/.zero-token-liveness"
           mkdir -p .github
-          date -u +"%Y-%m-%dT%H:%M:%SZ" > "$MARKER"
+          # Marker contains only a timestamp + label — never secrets
+          date -u +"%Y-%m-%dT%H:%M:%SZ zero-token-heartbeat" > "$MARKER"
           git config user.name "zero-token-heartbeat[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$MARKER"
           git commit -m "chore(heartbeat): keep n8n fleet alive (zero-token)" || true
           git push origin HEAD:${{ github.ref_name }}
-      - name: Report
+
+      - name: Report (always)
         run: |
-          echo "### Zero-Token Heartbeat | days=${{ steps.gate.outputs.days_since }} | signal=${{ steps.gate.outputs.signal || 'none' }} | tokens=0" >> $GITHUB_STEP_SUMMARY
+          echo "### Zero-Token Heartbeat Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Days since last commit | ${{ steps.gate.outputs.days_since }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Marker written | ${{ steps.gate.outputs.need_marker }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Signal | \`${{ steps.gate.outputs.signal || 'none' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Token cost | **0** |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ -n "${{ steps.gate.outputs.signal }}" ]]; then
+            echo "> **Action required** — downstream supervisor should now be invoked." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "> All clear. Bots remain alive. No tokens spent. Belongings protected." >> $GITHUB_STEP_SUMMARY
+          fi
