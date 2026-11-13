@@ -1,0 +1,24 @@
+# Overlay the existing repository stack; keep its canonical n8n pin unchanged.
+# docker compose -f docker-compose.local.yml -f docker-compose.seif.yml up -d --build
+services:
+  seif-runtime:
+    build: ./seif-runtime
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8765:8765"
+    environment:
+      SEIF_N8N_BASE_URL: http://n8n:5678
+      SEIF_N8N_UI_URL: http://127.0.0.1:5678
+    volumes:
+      - seif_runtime_data:/data
+    depends_on:
+      n8n:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/status',timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  seif_runtime_data:
